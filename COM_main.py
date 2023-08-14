@@ -90,12 +90,13 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
         file_handling.write_csv_file(file_path, "x,y,z,orn_x,orn_y,orn_z,orn_w", gt_data_array)
 
     #make images
-    simulation_and_display.make_images(ground_truth_folder, pushing_scenarios, view_matrix, proj_matrix, 1)
+    simulation_and_display.make_images(ground_truth_folder, pushing_scenarios, object_rotation_axes, view_matrix, proj_matrix, 1)
 
 
     available_methods = {"proposed_method":COM_search_methods.proposed_search_method,
                          "random_sampling":COM_search_methods.random_sampling,
-                         "Gaussian_process":COM_search_methods.Gaussian_Process_sampling}
+                         #"Gaussian_process":COM_search_methods.Gaussian_Process_sampling}
+                         "Simplified_CEM_sampling":COM_search_methods.simplified_cross_entropy_method_sampling}
 
     #get the samples
     for sample_num in np.arange(number_of_samples_per_method):
@@ -114,6 +115,7 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
                 current_COMs_list.append(generated_com)
             else:
                 current_COMs_list.append(ground_truth_COMs[i])
+        print(current_COMs_list)
 
         #run the simulations
         for i,method_name in enumerate(available_methods.keys()):
@@ -224,7 +226,7 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
 
         method_name_and_number = method_name+f"_{median_sample_index}".zfill(2)
         scenario_dir = os.path.join(test_dir, method_name_and_number)
-        simulation_and_display.make_images(scenario_dir, pushing_scenarios, view_matrix, proj_matrix, number_of_iterations)
+        simulation_and_display.make_images(scenario_dir, pushing_scenarios, object_rotation_axes, view_matrix, proj_matrix, number_of_iterations)
 
         simulation_and_display.make_end_states_videos(len(pushing_scenarios), ground_truth_folder, scenario_dir, test_dir, number_of_iterations, method_name_and_number)
 
@@ -249,6 +251,7 @@ full_run_one_scene(os.path.join("scenes","scene_mustard_bottle.csv"), 1)
 full_run_one_scene(os.path.join("scenes","scene_master_chef_can.csv"), 1)
 full_run_one_scene(os.path.join("scenes","scene_pudding_box.csv"), 1)
 full_run_one_scene(os.path.join("scenes","scene_sugar_box.csv"), 1)
+full_run_one_scene(os.path.join("scenes","scene_bleach_cleanser.csv"), 1)
 
 
 p.disconnect()

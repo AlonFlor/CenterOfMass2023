@@ -19,7 +19,8 @@ object_type_com_bounds_and_test_points["master_chef_can"] = p_utils.get_com_boun
 object_type_com_bounds_and_test_points["adjustable_wrench"] = p_utils.get_com_bounds_and_test_points_for_object_type("adjustable_wrench", 0.7, 0.7, 0.7)
 object_type_com_bounds_and_test_points["pudding_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("pudding_box", 0.7, 0.7, 0.7)
 object_type_com_bounds_and_test_points["sugar_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("sugar_box", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["mustard_bottle"] = p_utils.get_com_bounds_and_test_points_for_object_type("mustard_bottle", 0.7, 1.0, 0.6)
+object_type_com_bounds_and_test_points["mustard_bottle"] = p_utils.get_com_bounds_and_test_points_for_object_type("mustard_bottle", 0.7, 1.0, 0.7)
+object_type_com_bounds_and_test_points["bleach_cleanser"] = p_utils.get_com_bounds_and_test_points_for_object_type("bleach_cleanser", 0.5, 1.0, 0.7)
 
 
 def get_com_value_along_rotation_axis(object_type, rotation_axis_index, axis_sign):
@@ -232,7 +233,7 @@ def draw_graphs(test_dir, test_names, average_errors_list, std_dev_errors_list, 
 
 
 
-def display_COMs(mobile_object_IDs, sim_data, is_ground_truth):
+def display_COMs(mobile_object_IDs, sim_data, ranges_lists, object_rotation_axes, is_ground_truth):
     for i in np.arange(len(mobile_object_IDs)):
         object_id = mobile_object_IDs[i]
         pos, orn = sim_data[i]
@@ -240,12 +241,17 @@ def display_COMs(mobile_object_IDs, sim_data, is_ground_truth):
         COM_display_point = p.getDynamicsInfo(object_id, -1)[3]
         COM_display_point_wc = p_utils.get_world_space_point(COM_display_point, pos, orn)
 
-        COM_display_point_wc[2] = 0.07   #move com point up so it can be displayed above its target object
+        ranges_list = ranges_lists[i]
+        rotation_axis_index, rotation_axis_sign = object_rotation_axes[i]
+        rotation_axis_range = ranges_list[rotation_axis_index][1] - ranges_list[rotation_axis_index][0]
+
+        COM_display_point_wc[2] = rotation_axis_range + 0.01   #move com point up so it can be displayed above its target object
         COM_display_shape = p.createVisualShape(p.GEOM_SPHERE, radius=0.01, rgbaColor=(0.,(0. if is_ground_truth else 1.),(1. if is_ground_truth else 0.),1.))
         p.createMultiBody(baseVisualShapeIndex = COM_display_shape, basePosition=COM_display_point_wc)
 
 
-def make_images(scenario_dir, pushing_scenarios, view_matrix, proj_matrix, number_of_iterations=1):
+def make_images(scenario_dir, pushing_scenarios, object_rotation_axes, view_matrix, proj_matrix, number_of_iterations=1):
+
     for i,point_pair in enumerate(pushing_scenarios):
         sim_data_file = open(os.path.join(scenario_dir, f"push_{i}_data.csv"))
         sim_data = file_handling.read_numerical_csv_file(sim_data_file)
@@ -266,6 +272,11 @@ def make_images(scenario_dir, pushing_scenarios, view_matrix, proj_matrix, numbe
             push_folder = os.path.join(attempt_dir_path,"push_0") #same objects in each push, so load objects from push 0
             p_utils.open_saved_scene(scene_file, push_folder, [], [], mobile_object_IDs, mobile_object_types, held_fixed_list)
 
+            ranges_lists = []
+            for object_index in np.arange(len(mobile_object_IDs)):
+                ranges_list = p_utils.get_COM_bounds(mobile_object_types[object_index], crop_fraction_x = 1., crop_fraction_y = 1., crop_fraction_z = 1.)
+                ranges_lists.append(ranges_list)
+
             #set the objects
             pos_orn_list = []
             for object_index in np.arange(len(mobile_object_IDs)):
@@ -281,7 +292,7 @@ def make_images(scenario_dir, pushing_scenarios, view_matrix, proj_matrix, numbe
 
             #print
             push_folder = os.path.join(attempt_dir_path, f"push_{i}")
-            display_COMs(mobile_object_IDs, pos_orn_list, is_ground_truth=(number_of_iterations == 1))
+            display_COMs(mobile_object_IDs, pos_orn_list, ranges_lists, object_rotation_axes, is_ground_truth=(number_of_iterations == 1))
             p_utils.print_image(view_matrix, proj_matrix, push_folder, extra_message="after_push")
 
             #reset

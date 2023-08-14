@@ -99,7 +99,7 @@ def write_URDF_from_mesh(object_name, destination_folder, model_COM, extra_desig
     object_model_folder = os.path.join("object models",object_name)
     object_mesh_file = os.path.join("..",object_model_folder, object_name+".obj")
 
-    object_collision_mesh_file = os.path.join(object_model_folder, object_name+"_VHACD.obj")
+    object_collision_mesh_file = os.path.join(object_model_folder, object_name+"_VHACD_extruded.obj")
     if not os.path.isfile(object_collision_mesh_file):
         object_collision_mesh_file = object_mesh_file
     else:

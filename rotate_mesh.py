@@ -2,14 +2,6 @@ import os
 import numpy as np
 import file_handling
 
-def open_mesh_file(mesh_file_path):
-    mesh_file = open(mesh_file_path, "r", encoding="utf-8")
-    data_raw = []
-    for line in mesh_file:
-        data_raw.append(line.strip().split(" "))
-    mesh_file.close()
-    return data_raw
-
 def rotate_mesh(data_raw, angle):
     '''rotate mesh along z-axis'''
 
@@ -36,16 +28,9 @@ def rotate_mesh(data_raw, angle):
     return data
 
 
-
-def write_mesh_file(data_str, file_path):
-    mesh_file = open(file_path, "w", encoding="utf-8")
-    mesh_file.write(data_str)
-    mesh_file.close()
-
-
-'''mesh_data = open_mesh_file(os.path.join("object models", "hammer", "unrotated", "hammer.obj"))
+'''mesh_data = file_handling.open_mesh_file(os.path.join("object models", "hammer", "unrotated", "hammer.obj"))
 data_new = rotate_mesh(mesh_data, -21.*np.pi/180.)
-mesh_data = write_mesh_file(data_new, os.path.join("object models", "hammer", "hammer.obj"))'''
+file_handling.write_mesh_file(data_new, os.path.join("object models", "hammer", "hammer.obj"))'''
 
 #file_handling.read_csv_file()
 angle = -21.*np.pi/180.

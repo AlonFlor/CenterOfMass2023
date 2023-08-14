@@ -251,3 +251,16 @@ def delete_folder(folder):
             delete_folder(file)
         os.remove(os.path.join(folder, file))
     os.rmdir(folder)
+
+def open_mesh_file(mesh_file_path):
+    mesh_file = open(mesh_file_path, "r", encoding="utf-8")
+    data_raw = []
+    for line in mesh_file:
+        data_raw.append(line.strip().split(" "))
+    mesh_file.close()
+    return data_raw
+
+def write_mesh_file(data_str, file_path):
+    mesh_file = open(file_path, "w", encoding="utf-8")
+    mesh_file.write(data_str)
+    mesh_file.close()

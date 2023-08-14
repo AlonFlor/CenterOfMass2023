@@ -72,6 +72,7 @@ def random_sampling(number_of_pushing_scenarios, number_of_objects, object_rotat
     return updated_COMs
 
 
+
 def Gaussian_Process_sampling(number_of_pushing_scenarios, number_of_objects, object_rotation_axes, object_types,
                     starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, average_losses, target_object_index):
 
@@ -122,13 +123,16 @@ def Gaussian_Process_sampling(number_of_pushing_scenarios, number_of_objects, ob
     return updated_COMs
 
 
-def cross_entropy_method_sampling(number_of_pushing_scenarios, number_of_objects, object_rotation_axes, object_types,
+
+def simplified_cross_entropy_method_sampling(number_of_pushing_scenarios, number_of_objects, object_rotation_axes, object_types,
                      starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, average_losses, target_object_index):
 
-    #take 3 random samples first.
-    if len(accumulated_COMs_list) < 3:
+    #take 5 random samples first.
+    if len(accumulated_COMs_list) < 5:
         return random_sampling(number_of_pushing_scenarios, number_of_objects, object_rotation_axes, object_types,
                                starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, average_losses, target_object_index)
+
+    number_best_to_sample = min(10, int(0.5*len(accumulated_COMs_list)))
 
     current_COMs_list = accumulated_COMs_list[-1]
     updated_COMs = []
@@ -138,15 +142,47 @@ def cross_entropy_method_sampling(number_of_pushing_scenarios, number_of_objects
                 updated_COMs.append(current_COMs_list[object_index])
                 continue
 
+        com_x_range, com_y_range, com_z_range = simulation_and_display.object_type_com_bounds_and_test_points[object_types[object_index]]["com_bounds"]
+        rotation_axis_index, axis_sign = object_rotation_axes[object_index]
+
         accumulated_COMs_list_this_object = []
         for COMs_list in accumulated_COMs_list:
             accumulated_COMs_list_this_object.append(COMs_list[object_index])
-        accumulated_COMs_array_this_object = np.array(accumulated_COMs_list_this_object)
         average_losses_array = np.array(average_losses)
 
-        #TODO pdf in CEM is equivalent to function in GP.
-        # Or, maybe pdf can be initialized to uniform and then updated as more samples are taken
-        # ?????
+        sorted_indices = np.argsort(average_losses_array)
+        best_indices = sorted_indices[:number_best_to_sample]
+
+        accumulated_COMs_for_new_Gaussian = []
+        for index in best_indices:
+            accumulated_COMs_for_new_Gaussian.append(accumulated_COMs_list_this_object[index])
+        accumulated_COMs_for_new_Gaussian = np.array(accumulated_COMs_for_new_Gaussian)
+
+        #generate COM by sampling from Gaussian whose mean and std dev is that of best few pre-existing samples
+        means = np.mean(accumulated_COMs_for_new_Gaussian, axis=0)
+        std_devs = np.std(accumulated_COMs_for_new_Gaussian, axis=0)
+        generated_com = np.random.normal(means, std_devs)
+
+        # clamp object's new COM to bounds
+        if generated_com[0] < com_x_range[0]:
+            generated_com[0] = com_x_range[0]
+        if generated_com[0] > com_x_range[1]:
+            generated_com[0] = com_x_range[1]
+        if generated_com[1] < com_y_range[0]:
+            generated_com[1] = com_y_range[0]
+        if generated_com[1] > com_y_range[1]:
+            generated_com[1] = com_y_range[1]
+        if generated_com[2] < com_z_range[0]:
+            generated_com[2] = com_z_range[0]
+        if generated_com[2] > com_z_range[1]:
+            generated_com[2] = com_z_range[1]
+
+        generated_com[rotation_axis_index] = simulation_and_display.get_com_value_along_rotation_axis(object_types[object_index], rotation_axis_index, axis_sign)
+
+        updated_COMs.append(generated_com)
+
+    return updated_COMs
+
 
 
 def proposed_search_method(number_of_pushing_scenarios, number_of_objects, object_rotation_axes, object_types,
