@@ -1,0 +1,9 @@
+hammer_VHACD_extruded was made using different precomputed boundary values than the ones in the precomputed_bounding_points.csv file.
+
+Specifically, it used these older precomputed bounding points:
+
+x,y,z
+-0.105,-0.19,0.0
+0.025,-0.19,0.0
+-0.105,0.15,0.0
+-0.105,-0.19,0.031
