@@ -36,14 +36,16 @@ def get_objects_positions_and_orientations(mobile_object_IDs):
     # Position is that of object's origin according to its .obj file, rather than the origin of the pybullet object.
     # Do this by subtracting out the world coordinates of the current COM.
     sim_data = []
-    for object_ID in mobile_object_IDs:
+    for i,object_ID in enumerate(mobile_object_IDs):
         position, orientation = p.getBasePositionAndOrientation(object_ID)
 
+        #current_COM = np.array(coms_data[i])
         current_COM = p.getDynamicsInfo(object_ID, -1)[3]
         current_COM_oriented = p_utils.rotate_vector(current_COM, orientation)
         position_of_model_origin = np.array(position) - current_COM_oriented
 
         sim_data.append((position_of_model_origin, orientation))
+        #sim_data.append((np.array(position), orientation))
 
     return sim_data
 
@@ -150,14 +152,14 @@ def make_pushing_scenarios_and_get_object_rotation_axes(scene_folder):
     return pushing_scenarios, object_angle_axes
 
 #import time
-def run_attempt(scene_folder, pushing_scenario_index, point_1, point_2, view_matrix=None, proj_matrix=None, get_starting_data=False):
+def run_attempt(scene_data, test_dir, iter_num, pushing_scenario_index, point_1, point_2, view_matrix=None, proj_matrix=None, get_starting_data=False):
     mobile_object_IDs = []
     mobile_object_types = []
     held_fixed_list = []
+
     #start_time = time.perf_counter_ns()
-    push_folder = os.path.join(scene_folder,f"push_{pushing_scenario_index}")
-    os.mkdir(push_folder)
-    p_utils.open_saved_scene(os.path.join(scene_folder, "scene.csv"), push_folder, [], [], mobile_object_IDs, mobile_object_types, held_fixed_list)
+
+    p_utils.open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list)
 
     if get_starting_data:
         #get data before push
@@ -169,8 +171,12 @@ def run_attempt(scene_folder, pushing_scenario_index, point_1, point_2, view_mat
     time_limit = 4.
     if view_matrix is not None:
         #make video
+        iter_push_name = f"iteration_{iter_num}_pusn_{pushing_scenario_index}"
+        push_images_folder = os.path.join(test_dir, iter_push_name+"_images")
+        os.mkdir(push_images_folder)
         p_utils.push(point_2, cylinderID, dt, mobile_object_IDs=mobile_object_IDs, fps=24, view_matrix=view_matrix,proj_matrix=proj_matrix,
-                     imgs_dir = push_folder, available_image_num = 0, motion_script = None, time_out=time_limit)
+                     imgs_dir = push_images_folder, available_image_num = 0, motion_script = None, time_out=time_limit)
+        p_utils.make_video(test_dir, os.path.join(test_dir, iter_push_name+"_images"), "", 8,iter_push_name)
     else:
         p_utils.push(point_2, cylinderID, dt, time_out=time_limit)
 
@@ -187,24 +193,6 @@ def run_attempt(scene_folder, pushing_scenario_index, point_1, point_2, view_mat
     if get_starting_data:
         return starting_data, sim_data
     return sim_data
-
-
-'''def test_COM_candidate_within_mesh(object_type, COM_candidate):
-    com_bounds = object_type_com_bounds_and_test_points[object_type]["com_bounds"]
-    object_center = (0.5*(com_bounds[0][0]+com_bounds[0][1]), 0.5*(com_bounds[1][0]+com_bounds[1][1]), 0.5*(com_bounds[2][0]+com_bounds[2][1]))
-    file_name = os.path.join("object models",object_type,object_type+"_VHACD.obj")
-    if os.path.isfile(file_name):
-        object = p.createCollisionShape(p.GEOM_MESH, fileName=file_name) #here, object coords are world coords
-        test_results = p.rayTest(COM_candidate, object_center)
-        print("test_results",test_results)
-        result = False
-        if len(test_results) == 1:
-            if test_results[0][0] == -1:
-                result = True
-        p.resetSimulation()
-        p.setGravity(0, 0, -9.8)
-        return result
-    return True'''
 
 
 
@@ -233,13 +221,13 @@ def draw_graphs(test_dir, test_names, average_errors_list, std_dev_errors_list, 
 
 
 
-def display_COMs(mobile_object_IDs, sim_data, ranges_lists, object_rotation_axes, is_ground_truth):
+def display_COMs(mobile_object_IDs, coms_data, sim_data, ranges_lists, object_rotation_axes, is_ground_truth):
     for i in np.arange(len(mobile_object_IDs)):
         object_id = mobile_object_IDs[i]
         pos, orn = sim_data[i]
 
-        COM_display_point = p.getDynamicsInfo(object_id, -1)[3]
-        COM_display_point_wc = p_utils.get_world_space_point(COM_display_point, pos, orn)
+        current_COM = p.getDynamicsInfo(object_id, -1)[3]
+        COM_display_point_wc = p_utils.get_world_space_point(current_COM, pos, orn)
 
         ranges_list = ranges_lists[i]
         rotation_axis_index, rotation_axis_sign = object_rotation_axes[i]
@@ -250,7 +238,7 @@ def display_COMs(mobile_object_IDs, sim_data, ranges_lists, object_rotation_axes
         p.createMultiBody(baseVisualShapeIndex = COM_display_shape, basePosition=COM_display_point_wc)
 
 
-def make_images(scenario_dir, pushing_scenarios, object_rotation_axes, view_matrix, proj_matrix, number_of_iterations=1):
+def make_images(scenario_dir, gt_scene_data, pushing_scenarios, object_rotation_axes, view_matrix, proj_matrix, number_of_iterations=1):
 
     for i,point_pair in enumerate(pushing_scenarios):
         sim_data_file = open(os.path.join(scenario_dir, f"push_{i}_data.csv"))
@@ -258,19 +246,18 @@ def make_images(scenario_dir, pushing_scenarios, object_rotation_axes, view_matr
         sim_data_file.close()
 
         for iter_num in np.arange(number_of_iterations):
-            # open directory of current iteration
-            attempt_dir_path = os.path.join(scenario_dir, "iteration_" + str(iter_num).zfill(4))
-            if number_of_iterations==1:
-                attempt_dir_path = scenario_dir
+            #get centers of mass
+            coms_data_file = open(os.path.join(scenario_dir, f"COMs_data_iteration_{iter_num}.csv"))
+            coms_data = file_handling.read_numerical_csv_file(coms_data_file)
+            coms_data_file.close()
+
+            scene_data = p_utils.scene_data_change_COMs(gt_scene_data, coms_data)
 
             #open the scene
             mobile_object_IDs = []
             mobile_object_types = []
             held_fixed_list = []
-            scene_file = os.path.join(attempt_dir_path, "scene.csv")
-            scene_data = file_handling.read_csv_file(scene_file, [str, float, float, float, float, float, float, float, float, float, float, int])
-            push_folder = os.path.join(attempt_dir_path,"push_0") #same objects in each push, so load objects from push 0
-            p_utils.open_saved_scene(scene_file, push_folder, [], [], mobile_object_IDs, mobile_object_types, held_fixed_list)
+            p_utils.open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list)
 
             ranges_lists = []
             for object_index in np.arange(len(mobile_object_IDs)):
@@ -280,7 +267,7 @@ def make_images(scenario_dir, pushing_scenarios, object_rotation_axes, view_matr
             #set the objects
             pos_orn_list = []
             for object_index in np.arange(len(mobile_object_IDs)):
-                current_COM = np.array(scene_data[object_index][1:4])
+                current_COM = np.array(coms_data[object_index])
                 pos_orn = sim_data[iter_num][object_index*7:(object_index+1)*7]
                 pos = pos_orn[:3]
                 orn = pos_orn[3:]
@@ -291,9 +278,8 @@ def make_images(scenario_dir, pushing_scenarios, object_rotation_axes, view_matr
                 p.resetBasePositionAndOrientation(mobile_object_IDs[object_index], pos_adjusted, orn)
 
             #print
-            push_folder = os.path.join(attempt_dir_path, f"push_{i}")
-            display_COMs(mobile_object_IDs, pos_orn_list, ranges_lists, object_rotation_axes, is_ground_truth=(number_of_iterations == 1))
-            p_utils.print_image(view_matrix, proj_matrix, push_folder, extra_message="after_push")
+            display_COMs(mobile_object_IDs, coms_data, pos_orn_list, ranges_lists, object_rotation_axes, is_ground_truth=(number_of_iterations == 1))
+            p_utils.print_image(view_matrix, proj_matrix, scenario_dir, extra_message=f"iter_{iter_num}_push_{i}")
 
             #reset
             p.resetSimulation()
@@ -306,9 +292,8 @@ def make_end_states_videos(number_of_pushing_scenarios, ground_truth_dir, curren
         imgs_dir = os.path.join(current_test_dir, f"push_{push_num}_comparison_images")
         os.mkdir(imgs_dir)
         for i in np.arange(num_iterations):
-            try_folder_name = "iteration_"+str(i).zfill(4)
-            p_utils.combine_images(os.path.join(ground_truth_dir,f"push_{push_num}","after_push.png"),
-                                   os.path.join(current_test_dir,try_folder_name,f"push_{push_num}","after_push.png"),
-                                   os.path.join(imgs_dir,try_folder_name+".png"))
+            p_utils.combine_images(os.path.join(ground_truth_dir,f"iter_{0}_push_{push_num}.png"),
+                                   os.path.join(current_test_dir,f"iter_{i}_push_{push_num}.png"),
+                                   os.path.join(imgs_dir,"iteration_"+str(i).zfill(4)+".png"))
 
         p_utils.make_video(video_output_dir, imgs_dir, "iteration_", 8, video_name_prefix+f"_push_{push_num}")

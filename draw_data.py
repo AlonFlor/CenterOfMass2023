@@ -80,10 +80,13 @@ def plot_multiple_variables(var_x, var_x_name, var_y_name, vars_to_plot, var_err
     plt.title(title)
     plt.xlabel(var_x_name)
     plt.ylabel(var_y_name)
-    styles = ["-b", "-g", "-r", "-c", "-m", "-y", "-k"]
+    styles = ["-b", "-g", "-r", "-y", "-k", "-c", "-m"]
     for i in np.arange(len(vars_to_plot)):
-        #plt.errorbar(var_x, vars_to_plot[i], yerr=var_errors[i], fmt=styles[i], label=var_names[i])
-        plt.plot(var_x, vars_to_plot[i], styles[i], label=var_names[i].replace("_"," "))
+        #plt.errorbar(var_x, vars_to_plot[i], yerr=var_errors[i], fmt=styles[i], label=var_names[i].replace("_"," "))
+        plt.plot(var_x, vars_to_plot[i], styles[i], linewidth = 3., label=var_names[i].replace("_"," "))
+        avg = vars_to_plot[i].flatten()
+        flattened_errors = var_errors[i].flatten()
+        plt.fill_between(var_x, avg+flattened_errors, avg-flattened_errors, color=styles[i][1:], alpha=0.2)
     plt.legend(loc='upper right', shadow=True, fontsize='x-large')
     if out_dir is not None:
         plt.savefig(os.path.join(out_dir, title))

@@ -262,7 +262,9 @@ def proposed_search_method(number_of_pushing_scenarios, number_of_objects, objec
                 u = np.sign(sim_angle) * cor_to_c
 
                 # update COM changes
-                learning_rate = 0.2*min_range_magn
+                learning_rate = 0.3*min_range_magn  #single-object learning rate
+                if number_of_objects > 1:
+                    learning_rate = 1.5*min_range_magn #clutter learning rate
                 single_push_COM_change = learning_rate * (sim_angle - gt_angle) * u
                 COM_changes += single_push_COM_change
                 # print("sim_angle,gt_angle",sim_angle,gt_angle)
@@ -296,7 +298,7 @@ def proposed_search_method(number_of_pushing_scenarios, number_of_objects, objec
 
 
 
-def find_COM(number_of_iterations, test_dir, original_scene_loc, pushing_scenarios, starting_data, ground_truth_data,
+def find_COM(number_of_iterations, test_dir, gt_scene_data, pushing_scenarios, starting_data, ground_truth_data,
              object_rotation_axes, object_types, current_COMs_list, method_to_use,
              view_matrix=None, proj_matrix=None, ground_truth_COMs=None, update_only_target=False):
 
@@ -313,18 +315,14 @@ def find_COM(number_of_iterations, test_dir, original_scene_loc, pushing_scenari
     for iter_num in np.arange(number_of_iterations):
         target_object_index = 0
 
-        # make directory for new attempt with alternate COMs
-        attempt_dir_path = os.path.join(test_dir,"iteration_"+str(iter_num).zfill(4))
-        os.mkdir(attempt_dir_path)
-
-        # create scene file
-        p_utils.save_scene_with_shifted_COMs(original_scene_loc, os.path.join(attempt_dir_path, "scene.csv"), current_COMs_list)
+        # generate scene data
+        scene_data = p_utils.scene_data_change_COMs(gt_scene_data, current_COMs_list)
 
         #run the scene
         this_scene_data = []
         for i,point_pair in enumerate(pushing_scenarios):
             point_1, point_2 = point_pair
-            this_scene_data.append(simulation_and_display.run_attempt(attempt_dir_path, i, point_1, point_2, view_matrix, proj_matrix))
+            this_scene_data.append(simulation_and_display.run_attempt(scene_data, test_dir, iter_num, i, point_1, point_2, view_matrix, proj_matrix))
         simulated_data_list.append(this_scene_data)
 
 

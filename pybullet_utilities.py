@@ -428,6 +428,51 @@ def open_saved_scene(scene_file, test_dir, shapes_list, motion_script, mobile_ob
     return binID
 
 
+def scene_data_change_COMs(scene_data, new_COM_list):
+    new_scene_data = []
+    object_count = 0
+    for object_type, com_x, com_y, com_z, x, y, z, orient_x, orient_y, orient_z, orient_w, held_fixed in scene_data:
+        new_COM = new_COM_list[object_count]
+        unrotated = [-com_x+new_COM[0], -com_y+new_COM[1], -com_z+new_COM[2]]
+        orientation = (orient_x,orient_y,orient_z,orient_w)
+        rotated = rotate_vector(unrotated, orientation)
+
+        new_scene_data.append([object_type, new_COM[0], new_COM[1], new_COM[2], x+rotated[0],y+rotated[1],z+rotated[2], orient_x, orient_y, orient_z, orient_w, held_fixed])
+        object_count+=1
+    return new_scene_data
+
+def open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list):
+    # load plane
+    planeID = p.loadURDF(os.path.join("object models", "plane", "plane.urdf"), useFixedBase=True)
+
+    for object_type, com_x, com_y, com_z, x, y, z, orient_x, orient_y, orient_z, orient_w, held_fixed in scene_data:
+        held_fixed_bool = bool(held_fixed)
+
+        object_model_folder = os.path.join("object models", object_type)
+        object_mesh_file = os.path.join(object_model_folder, object_type + ".obj")
+
+        object_collision_mesh_file = os.path.join(object_model_folder, object_type + "_VHACD_extruded.obj")
+        if not os.path.isfile(object_collision_mesh_file):
+            object_collision_mesh_file = object_mesh_file
+
+        com = [com_x, com_y, com_z]
+
+        obj_coll = p.createCollisionShape(p.GEOM_MESH, fileName=object_collision_mesh_file)#, collisionFramePosition=neg_com)
+        obj_vis = p.createVisualShape(p.GEOM_MESH, fileName=object_mesh_file)#, visualFramePosition=neg_com)
+        objectID = p.createMultiBody((0. if held_fixed_bool else 1.), obj_coll, obj_vis, baseInertialFramePosition=com)
+
+        mobile_object_IDs.append(objectID)
+        mobile_object_types.append(object_type)
+        held_fixed_list.append(held_fixed_bool)
+        p.resetBasePositionAndOrientation(objectID, (x, y, z), (orient_x, orient_y, orient_z, orient_w))
+
+
+def open_saved_scene_no_printing_files(scene_file, mobile_object_IDs, mobile_object_types, held_fixed_list):
+    scene_data = file_handling.read_csv_file(scene_file, [str, float, float, float, float, float, float, float, float, float, float, int])
+    open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list)
+
+
+
 def open_saved_scene_existing_objects(scene_file,mobile_object_IDs):
     scene_data = file_handling.read_csv_file(scene_file, [str, float, float, float, float, float, float, float, float, float, float, int])
 

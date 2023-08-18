@@ -19,7 +19,7 @@ view_matrix, proj_matrix = p_utils.set_up_camera((0.,0.,0.), 0.75, 45, -65)
 
 def full_run_one_scene(original_scene_loc, number_of_objects):
     number_of_samples_per_method = 15
-    number_of_iterations = 50
+    number_of_iterations = 25#50
 
     # make directory for simulation files
     testNum = 1
@@ -53,6 +53,7 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
 
     #replace ground truth scene with version of the scene that has the modified ground truth COMs
     p_utils.save_scene_with_shifted_COMs(ground_truth_scene_loc, ground_truth_scene_loc, ground_truth_COMs)
+    gt_scene_data = file_handling.read_csv_file(ground_truth_scene_loc, [str, float, float, float, float, float, float, float, float, float, float, int])
 
     #make sure ground truth COMs are in the COM bounds
     for i in np.arange(number_of_objects):
@@ -65,6 +66,9 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
             print("ground truth COM outside of defined range")
             return
 
+    file_path = os.path.join(ground_truth_folder, f"COMs_data_iteration_{0}.csv")
+    file_handling.write_csv_file(file_path, "x,y,z", ground_truth_COMs)
+
 
     sim_start = time.perf_counter_ns()
 
@@ -73,10 +77,9 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
     ground_truth_data = []
     for i,point_pair in enumerate(pushing_scenarios):
         point_1, point_2 = point_pair
-        starting_data_p, ground_truth_data_p = simulation_and_display.run_attempt(ground_truth_folder, i, point_1, point_2,
+        starting_data_p, ground_truth_data_p = simulation_and_display.run_attempt(gt_scene_data, ground_truth_folder, 0, i, point_1, point_2,
                                                                                   view_matrix=view_matrix, proj_matrix=proj_matrix,
                                                                                   get_starting_data=True)
-        p_utils.make_video(ground_truth_folder, os.path.join(ground_truth_folder,f"push_{i}"), "", 8, f"push_{i}")
         starting_data.append(starting_data_p)
         ground_truth_data.append(ground_truth_data_p)
 
@@ -90,13 +93,13 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
         file_handling.write_csv_file(file_path, "x,y,z,orn_x,orn_y,orn_z,orn_w", gt_data_array)
 
     #make images
-    simulation_and_display.make_images(ground_truth_folder, pushing_scenarios, object_rotation_axes, view_matrix, proj_matrix, 1)
+    simulation_and_display.make_images(ground_truth_folder, gt_scene_data, pushing_scenarios, object_rotation_axes, view_matrix, proj_matrix, 1)
 
 
     available_methods = {"proposed_method":COM_search_methods.proposed_search_method,
                          "random_sampling":COM_search_methods.random_sampling,
-                         #"Gaussian_process":COM_search_methods.Gaussian_Process_sampling}
-                         "Simplified_CEM_sampling":COM_search_methods.simplified_cross_entropy_method_sampling}
+                         "Gaussian_process":COM_search_methods.Gaussian_Process_sampling,
+                         "simplified_CEM":COM_search_methods.simplified_cross_entropy_method_sampling}
 
     #get the samples
     for sample_num in np.arange(number_of_samples_per_method):
@@ -115,7 +118,7 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
                 current_COMs_list.append(generated_com)
             else:
                 current_COMs_list.append(ground_truth_COMs[i])
-        print(current_COMs_list)
+        #print(current_COMs_list)
 
         #run the simulations
         for i,method_name in enumerate(available_methods.keys()):
@@ -123,16 +126,17 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
             method_dir = os.path.join(test_dir, method_name + f"_{sample_num}".zfill(2))
             os.mkdir(method_dir)
             COM_errors, losses, accumulated_COMs_list, simulated_data_list = \
-                COM_search_methods.find_COM(number_of_iterations, method_dir, original_scene_loc,
+                COM_search_methods.find_COM(number_of_iterations, method_dir, gt_scene_data,
                                             pushing_scenarios, starting_data, ground_truth_data,
                                             object_rotation_axes, object_types,
                                             current_COMs_list, available_methods[method_name],
+                                            #view_matrix=view_matrix, proj_matrix=proj_matrix,
                                             ground_truth_COMs=ground_truth_COMs, update_only_target=True)
 
             #print simulation data to a csv file
-            '''for iter_num in np.arange(number_of_iterations):
-                file_path = os.path.join(method_dir, "iteration_" + str(iter_num).zfill(4), "COMs_data.csv")
-                file_handling.write_csv_file(file_path, "x,y,z", accumulated_COMs_list[iter_num])'''
+            for iter_num in np.arange(number_of_iterations):
+                file_path = os.path.join(method_dir, f"COMs_data_iteration_{iter_num}.csv")
+                file_handling.write_csv_file(file_path, "x,y,z", accumulated_COMs_list[iter_num])
             for pushing_scenario_num in np.arange(len(pushing_scenarios)):
                 simulated_data_list_to_array = []
                 for iter_num in np.arange(number_of_iterations):
@@ -157,6 +161,7 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
     time_to_run_sims = (sim_end - sim_start) / 1e9
 
 
+    # read the information about the run for graphing
     COM_errors_list = []
     losses_list = []
     for i, method_name in enumerate(available_methods.keys()):
@@ -209,8 +214,8 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
     test_names = []
     for i,method_name in enumerate(available_methods.keys()):
         test_names.append(method_name)
-    #extra for best of random sampling
-    test_names.append("best_of_random_sampling")
+    #extra for random search
+    test_names.append("random_search")
 
     # make graphs with average for each type of optimization, and where x-axis is iteration number.
     simulation_and_display.draw_graphs(test_dir, test_names, average_COM_errors, std_dev_COM_errors, average_losses, std_dev_losses)
@@ -226,7 +231,7 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
 
         method_name_and_number = method_name+f"_{median_sample_index}".zfill(2)
         scenario_dir = os.path.join(test_dir, method_name_and_number)
-        simulation_and_display.make_images(scenario_dir, pushing_scenarios, object_rotation_axes, view_matrix, proj_matrix, number_of_iterations)
+        simulation_and_display.make_images(scenario_dir,gt_scene_data, pushing_scenarios, object_rotation_axes, view_matrix, proj_matrix, number_of_iterations)
 
         simulation_and_display.make_end_states_videos(len(pushing_scenarios), ground_truth_folder, scenario_dir, test_dir, number_of_iterations, method_name_and_number)
 
@@ -245,13 +250,13 @@ def full_run_one_scene(original_scene_loc, number_of_objects):
     print('Time to make videos:', time_to_make_videos, 's\t\t', time_to_make_videos/3600., 'h\n\n')
 
 
-#full_run_one_scene(os.path.join("scenes","scene_cracker_boxes_clutter.csv"), 4)
-full_run_one_scene(os.path.join("scenes","scene_cracker_box.csv"), 1)
-full_run_one_scene(os.path.join("scenes","scene_mustard_bottle.csv"), 1)
-full_run_one_scene(os.path.join("scenes","scene_master_chef_can.csv"), 1)
-full_run_one_scene(os.path.join("scenes","scene_pudding_box.csv"), 1)
-full_run_one_scene(os.path.join("scenes","scene_sugar_box.csv"), 1)
-full_run_one_scene(os.path.join("scenes","scene_bleach_cleanser.csv"), 1)
+full_run_one_scene(os.path.join("scenes","scene_cracker_boxes_clutter.csv"), 4)
+#full_run_one_scene(os.path.join("scenes","scene_cracker_box.csv"), 1)
+#full_run_one_scene(os.path.join("scenes","scene_mustard_bottle.csv"), 1)
+#full_run_one_scene(os.path.join("scenes","scene_master_chef_can.csv"), 1)
+#full_run_one_scene(os.path.join("scenes","scene_pudding_box.csv"), 1)
+#full_run_one_scene(os.path.join("scenes","scene_sugar_box.csv"), 1)
+#full_run_one_scene(os.path.join("scenes","scene_bleach_cleanser.csv"), 1)
 
 
 p.disconnect()

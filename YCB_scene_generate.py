@@ -64,10 +64,10 @@ for i in range(3):
     create_obj("cracker_box", new_com, position, orientation)'''
 
 
-available_objects = ["cracker_box", "pudding_box", "master_chef_can", "adjustable_wrench", "mustard_bottle", "sugar_box"]
-#number_of_each_object = [1, 1, 1, 1, 0, 0]
-number_of_each_object = [0, 0, 0, 0, 1, 0]
-object_COMs = [(-0.01,-0.01,0.08), (0.0,0.0,0.015), (-0.015,-0.01,0.06),  (-0.0163,-0.0483,0.005), (-0.005,-0.027,0.07), (-0.005,-0.01,0.12)]
+available_objects = ["cracker_box", "pudding_box", "master_chef_can", "hammer", "mustard_bottle", "sugar_box", "bleach_cleanser"]
+#number_of_each_object = [1, 1, 1, 1, 0, 0, 0]
+number_of_each_object = [0, 0, 0, 0, 0, 0, 1]
+object_COMs = [(-0.01,-0.01,0.08), (0.0,0.0,0.015), (-0.015,-0.01,0.06),  (-0.0345,0.0775169,0.015), (-0.005,-0.027,0.07), (-0.005,-0.01,0.12), (-0.025,0.012,0.1)]
 #generate objects with different COMs
 for i in range(len(available_objects)):
     for j in range(number_of_each_object[i]):
