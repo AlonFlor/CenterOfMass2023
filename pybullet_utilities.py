@@ -274,6 +274,24 @@ def get_object_space_point(point, position, orientation):
     return rotate_vector(point-position, quat_inverse(orientation))
 
 
+def get_objects_positions_and_orientations(mobile_object_IDs):
+    # Position is that of object's origin according to its .obj file, rather than the origin of the pybullet object.
+    # Do this by subtracting out the world coordinates of the current COM.
+    sim_data = []
+    for i,object_ID in enumerate(mobile_object_IDs):
+        position, orientation = p.getBasePositionAndOrientation(object_ID)
+
+        #current_COM = np.array(coms_data[i])
+        current_COM = p.getDynamicsInfo(object_ID, -1)[3]
+        current_COM_oriented = rotate_vector(current_COM, orientation)
+        position_of_model_origin = np.array(position) - current_COM_oriented
+
+        sim_data.append((position_of_model_origin, orientation))
+        #sim_data.append((np.array(position), orientation))
+
+    return sim_data
+
+
 
 def draw_center_of_rotation(start_position, start_orientation,position, orientation):
     # draw image
@@ -441,25 +459,38 @@ def scene_data_change_COMs(scene_data, new_COM_list):
         object_count+=1
     return new_scene_data
 
-def open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list):
+def make_body(object_type, held_fixed_bool, com=None):
+    object_model_folder = os.path.join("object models", object_type)
+    object_mesh_file = os.path.join(object_model_folder, object_type + ".obj")
+
+    object_collision_mesh_file = os.path.join(object_model_folder, object_type + "_VHACD_extruded.obj")
+    if not os.path.isfile(object_collision_mesh_file):
+        object_collision_mesh_file = os.path.join(object_model_folder, object_type + "_extruded.obj")
+        if not os.path.isfile(object_collision_mesh_file):
+            object_collision_mesh_file = object_mesh_file
+
+    obj_coll = p.createCollisionShape(p.GEOM_MESH,
+                                      fileName=object_collision_mesh_file)  # , collisionFramePosition=neg_com)
+    obj_vis = p.createVisualShape(p.GEOM_MESH, fileName=object_mesh_file)  # , visualFramePosition=neg_com)
+    if com is None:
+        objectID = p.createMultiBody((0. if held_fixed_bool else 1.), obj_coll, obj_vis)
+    else:
+        objectID = p.createMultiBody((0. if held_fixed_bool else 1.), obj_coll, obj_vis, baseInertialFramePosition=com)
+    return objectID
+
+def open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane=None):
     # load plane
     planeID = p.loadURDF(os.path.join("object models", "plane", "plane.urdf"), useFixedBase=True)
+    if shift_plane is not None:
+        pos,orn = p.getBasePositionAndOrientation(planeID)
+        p.resetBasePositionAndOrientation(planeID, (pos[0]+shift_plane[0], pos[1]+shift_plane[1], pos[2]+shift_plane[2]), orn)
 
     for object_type, com_x, com_y, com_z, x, y, z, orient_x, orient_y, orient_z, orient_w, held_fixed in scene_data:
         held_fixed_bool = bool(held_fixed)
 
-        object_model_folder = os.path.join("object models", object_type)
-        object_mesh_file = os.path.join(object_model_folder, object_type + ".obj")
-
-        object_collision_mesh_file = os.path.join(object_model_folder, object_type + "_VHACD_extruded.obj")
-        if not os.path.isfile(object_collision_mesh_file):
-            object_collision_mesh_file = object_mesh_file
-
         com = [com_x, com_y, com_z]
 
-        obj_coll = p.createCollisionShape(p.GEOM_MESH, fileName=object_collision_mesh_file)#, collisionFramePosition=neg_com)
-        obj_vis = p.createVisualShape(p.GEOM_MESH, fileName=object_mesh_file)#, visualFramePosition=neg_com)
-        objectID = p.createMultiBody((0. if held_fixed_bool else 1.), obj_coll, obj_vis, baseInertialFramePosition=com)
+        objectID=make_body(object_type, held_fixed_bool, com)
 
         mobile_object_IDs.append(objectID)
         mobile_object_types.append(object_type)
@@ -525,9 +556,9 @@ def save_scene_no_bin(scene_file, mobile_object_IDs, mobile_object_types, held_f
         ID = mobile_object_IDs[i]
         object_type = mobile_object_types[i]
         held_fixed = held_fixed_list[i]
-        pose,orientation = p.getBasePositionAndOrientation(ID)
+        pos,orientation = p.getBasePositionAndOrientation(ID)
         COM = p.getDynamicsInfo(ID,-1)[3]
-        data.append([object_type, COM[0], COM[1], COM[2], pose[0], pose[1], pose[2], orientation[0], orientation[1], orientation[2], orientation[3], int(held_fixed)])
+        data.append([object_type, COM[0], COM[1], COM[2], pos[0], pos[1], pos[2], orientation[0], orientation[1], orientation[2], orientation[3], int(held_fixed)])
     file_handling.write_csv_file(scene_file, "object_type,COM_x,COM_y,COM_z,x,y,z,orient_x,orient_y,orient_z,orient_w,held_fixed", data)
 
 
@@ -608,6 +639,118 @@ def open_saved_cell_scene(scene_file, test_dir, shapes_list, motion_script, mobi
     return binID
 
 
+def get_pushing_points(point_1_basic, point_2_basic, cylinder_height_offset, push_distance):
+    point_1 = point_1_basic + cylinder_height_offset
+    point_2 = point_2_basic + cylinder_height_offset
+
+    direction = point_2 - point_1
+    direction_normalized = direction / np.linalg.norm(direction)
+    point_2 = push_distance * direction_normalized + point_1
+    return point_1, point_2
+
+import time
+def make_pushing_scenarios_and_get_object_rotation_axes(original_scene_data, pushes_per_object_direction, cylinder_height_offset, push_distance, object_type_com_bounds_and_test_points,
+                                                        shift_plane=None):
+    mobile_object_IDs = []
+    mobile_object_types = []
+    held_fixed_list = []
+
+    # open the scene just to get the mobile object IDs and types
+    open_scene_data(original_scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane=shift_plane)
+    starting_data = get_objects_positions_and_orientations(mobile_object_IDs)
+    p.resetSimulation()
+
+    # get the index of the object coords version of the world coords z-axis, and the sign of the world coords z-axis in object coords
+    object_rotation_axes = []
+    for i in np.arange(len(starting_data)):
+        rotated_z_vector = rotate_vector(np.array([0., 0., 1.]), quat_inverse(starting_data[i][1]))
+        direction_index = np.argmax(np.abs(rotated_z_vector))
+        axis_sign = np.sign(rotated_z_vector[direction_index])
+        object_rotation_axes.append((direction_index, axis_sign))
+
+    pushing_scenarios = []
+    for object_index in np.arange(len(starting_data)):
+        pushing_scenarios_this_object = []
+
+        target_pos, target_orn = starting_data[object_index]
+        target_bounds = object_type_com_bounds_and_test_points[mobile_object_types[0]]["full_bounds"]
+        rotation_axis_index = object_rotation_axes[object_index][0]
+
+        # get bounds not in rotation axis
+        axis0_index = 0
+        if axis0_index == rotation_axis_index:
+            axis0_index += 1
+        axis1_index = 0
+        while (axis1_index == axis0_index) or (axis1_index == rotation_axis_index):
+            axis1_index += 1
+        axis0_min, axis0_max = target_bounds[axis0_index]
+        axis1_min, axis1_max = target_bounds[axis1_index]
+
+        # get the sides of the object
+        points = [np.array([0., 0., 0.]) for i in np.arange(4)]
+        for i in np.arange(4):
+            # min,min    max,min     min,max     max,max
+            points[i][axis0_index] = axis0_min if i % 2 == 0 else axis0_max
+            points[i][axis1_index] = axis1_min if int(i / 2) == 0 else axis1_max
+        axis_shift = 0.025  # distance of 0.025 to prevent starting point from being inside object
+        axis0_shift = np.array([0., 0., 0.])
+        axis0_shift[axis0_index] = axis_shift
+        axis1_shift = np.array([0., 0., 0.])
+        axis1_shift[axis1_index] = axis_shift
+        edges = [(points[0] - axis1_shift, points[1] - axis1_shift), (points[2] + axis1_shift, points[3] + axis1_shift),
+                 (points[0] - axis0_shift, points[2] - axis0_shift), (points[1] + axis0_shift, points[3] + axis0_shift)]
+        # edge 0 parallel to edge 1          edge 2 parallel to edge 3
+
+        # generate the points needed to be candidates for pusher starting positions or for pusher directions
+        candidates = []
+        for i in np.arange(2):
+            #scaled_candidate_locs = np.linspace(0.45,0.55, pushes_per_object_direction)
+            scaled_candidate_locs = np.linspace(0.25,0.75, pushes_per_object_direction)
+
+            candidates.append([[scl * edges[2*i+1][0] + (1. - scl) * edges[2*i+1][1],
+                                scl * edges[2*i][0] + (1. - scl) * edges[2*i][1]] for scl in scaled_candidate_locs])
+
+        # get the world coordinates of the candidate points
+        candidates_wc = []
+        for i in np.arange(2):
+            candidates_wc.append([[get_world_space_point(point_1, target_pos, target_orn),
+                                   get_world_space_point(point_2, target_pos, target_orn)]
+                                  for point_1, point_2 in candidates[i]])
+
+        # filter these points based on if the pusher can fit in there
+        open_scene_data(original_scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane=shift_plane)
+        cylinderID = create_cylinder(0.015 / 2, 0.05)
+        for i in np.arange(2):
+            pushing_scenarios_this_object_this_side = []
+            filtered_candidate_pairs = []
+            for candidate_pair in candidates_wc[i]:
+                # test the canddiate pair
+                p.resetBasePositionAndOrientation(cylinderID, candidate_pair[0] + cylinder_height_offset, (0., 0., 0., 1.))
+                p.performCollisionDetection()
+                #time.sleep(4.)
+                contact_results = p.getContactPoints(cylinderID)
+                if len(contact_results) == 0:
+                    filtered_candidate_pairs.append(candidate_pair)
+                else:
+                    # if this pair was rejected, switch the points and test again. Maybe the second point in the pair would fit as a starting point.
+                    p.resetBasePositionAndOrientation(cylinderID, candidate_pair[1] + cylinder_height_offset, (0., 0., 0., 1.))
+                    p.performCollisionDetection()
+                    #time.sleep(4.)
+                    contact_results = p.getContactPoints(cylinderID)
+                    if len(contact_results) == 0:
+                        filtered_candidate_pairs.append([candidate_pair[1], candidate_pair[0]])
+            for candidate_pair in filtered_candidate_pairs:
+                pushing_scenarios_this_object_this_side.append(get_pushing_points(candidate_pair[0], candidate_pair[1], cylinder_height_offset, push_distance))
+            pushing_scenarios_this_object.append(pushing_scenarios_this_object_this_side)
+
+        # reset the simulation
+        p.resetSimulation()
+        p.setGravity(0, 0, -9.8)
+
+        pushing_scenarios.append(pushing_scenarios_this_object)
+
+    return pushing_scenarios, object_rotation_axes
+
 
 
 
@@ -654,22 +797,24 @@ def get_com_bounds_and_test_points_for_object_type(object_type, crop_fraction_x,
 
     #find the acceptable COM bounds, in object coordinates
     com_x_range, com_y_range, com_z_range = get_COM_bounds(object_type, crop_fraction_x, crop_fraction_y, crop_fraction_z)
-    #print("ranges",com_x_range, com_y_range, com_z_range)
+
+    #get the full bounds, in object coordinates
+    full_x_range, full_y_range, full_z_range = get_COM_bounds(object_type, 1., 1., 1.)
 
     #test points
     test_points_x_amount = 5
     test_points_y_amount = 5
     test_points_z_amount = 5
-    test_points_x_coords =np.linspace(com_x_range[0],com_x_range[1], test_points_x_amount+2)[1:-1]
-    test_points_y_coords =np.linspace(com_y_range[0],com_y_range[1], test_points_y_amount+2)[1:-1]
-    test_points_z_coords =np.linspace(com_z_range[0],com_z_range[1], test_points_z_amount+2)[1:-1]
+    test_points_x_coords =np.linspace(full_x_range[0],full_x_range[1], test_points_x_amount+2)[1:-1]
+    test_points_y_coords =np.linspace(full_y_range[0],full_y_range[1], test_points_y_amount+2)[1:-1]
+    test_points_z_coords =np.linspace(full_z_range[0],full_z_range[1], test_points_z_amount+2)[1:-1]
     test_points = []
     for i in np.arange(test_points_x_amount):
         for j in np.arange(test_points_y_amount):
             for k in np.arange(test_points_z_amount):
                 test_points.append(np.array([test_points_x_coords[i],test_points_y_coords[j],test_points_z_coords[k]]))
 
-    return {"com_bounds":(com_x_range, com_y_range, com_z_range),"test_points":test_points}
+    return {"com_bounds":(com_x_range, com_y_range, com_z_range),"full_bounds":(full_x_range, full_y_range, full_z_range),"test_points":test_points}
 
 
 def add_to_motion_script(id, time_val, motion_script):

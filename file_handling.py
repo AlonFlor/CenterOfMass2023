@@ -5,7 +5,8 @@ import time
 
 #file handling
 
-def read_numerical_csv_file(file):
+def read_numerical_csv_file(file_path, num_type=float):
+    file = open(file_path)
     data_raw = []
     for line in file:
         data_raw.append(line.strip().split(","))
@@ -13,8 +14,9 @@ def read_numerical_csv_file(file):
     for line in data_raw[1:]:
         line_data = []
         for item in line:
-            line_data.append(float(item))
+            line_data.append(num_type(item))
         data.append(line_data)
+    file.close()
     return np.array(data)
 
 def read_csv_file(file_path, data_types):
@@ -41,20 +43,10 @@ def write_csv_file(file_path, header, data):
     file.close()
 
 
-def read_robot_lab_data(robot_lab_data_folder):
-    pose_data_file = open(os.path.join(robot_lab_data_folder, "outobjectposes.csv"))
-    forces_data_file = open(os.path.join(robot_lab_data_folder, "outforce.csv"))
-    end_effector_data_file = open(os.path.join(robot_lab_data_folder, "outendeff.csv"))
-
-    pose_data = read_numerical_csv_file(pose_data_file)[0]
-    forces_data = read_numerical_csv_file(forces_data_file)
-    end_effector_data = read_numerical_csv_file(end_effector_data_file)
-
-    pose_data_file.close()
-    forces_data_file.close()
-    end_effector_data_file.close()
-
-    return pose_data, forces_data, end_effector_data
+def write_string(file_path, string_to_write):
+    file = open(file_path, "w", encoding="utf-8")
+    file.write(string_to_write)
+    file.close()
 
 
 
