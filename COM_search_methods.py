@@ -44,7 +44,7 @@ def update_COM_errors(COM_errors, iter_num, number_of_objects, object_rotation_a
 
 
 
-def random_sampling(pushing_scenarios, number_of_objects, object_rotation_axes, object_types,
+def random_sampling(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
                      starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses):
     updated_COMs = []
     for object_index in np.arange(number_of_objects):
@@ -61,12 +61,12 @@ def random_sampling(pushing_scenarios, number_of_objects, object_rotation_axes, 
 
 
 
-def Gaussian_Process_sampling(pushing_scenarios, number_of_objects, object_rotation_axes, object_types,
+def Gaussian_Process_sampling(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
                     starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses):
 
     #take 3 random samples first.
     if len(accumulated_COMs_list) < 3:
-        return random_sampling(pushing_scenarios, number_of_objects, object_rotation_axes, object_types,
+        return random_sampling(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
                                starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses)
 
     updated_COMs = []
@@ -107,12 +107,12 @@ def Gaussian_Process_sampling(pushing_scenarios, number_of_objects, object_rotat
 
 
 
-def simplified_cross_entropy_method_sampling(pushing_scenarios, number_of_objects, object_rotation_axes, object_types,
+def simplified_cross_entropy_method_sampling(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
                      starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses):
 
     #take 5 random samples first.
     if len(accumulated_COMs_list) < 5:
-        return random_sampling(pushing_scenarios, number_of_objects, object_rotation_axes, object_types,
+        return random_sampling(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
                                starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses)
 
     number_best_to_sample = min(10, int(0.5*len(accumulated_COMs_list)))
@@ -162,7 +162,7 @@ def simplified_cross_entropy_method_sampling(pushing_scenarios, number_of_object
 
 
 
-def proposed_search_method(pushing_scenarios, number_of_objects, object_rotation_axes, object_types,
+def proposed_search_method(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
                      starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses):
     current_COMs_list = accumulated_COMs_list[-1]
     # find angles of the objects
@@ -204,18 +204,16 @@ def proposed_search_method(pushing_scenarios, number_of_objects, object_rotation
         com_x_range, com_y_range, com_z_range = \
             simulation_and_display.object_type_com_bounds_and_test_points[object_types[object_index]]["com_bounds"]
 
-        #get the minimum range of possible COM locations along the plane, to be used in calibrating the learning rate
-        com_range_magns = [com_x_range[1] - com_x_range[0], com_y_range[1] - com_y_range[0], com_z_range[1] - com_z_range[0]]
-        com_range_magns[rotation_axis_index] = 1000000.
-        min_range_magn = min(com_range_magns)
-
         for pushing_scenario_index, point_pair in enumerate(pushing_scenarios):
+            #only update object that the push targets
+            if not (object_index == pushing_scenario_object_targets[pushing_scenario_index]):
+                continue
             point_1, point_2 = point_pair
 
             # get position and orientation data
             start_position, start_orientation = starting_data[object_index]
             position, orientation = this_scene_data[pushing_scenario_index][object_index]
-            position_gt, orientation_gt = ground_truth_data[pushing_scenario_index][object_index]
+            #position_gt, orientation_gt = ground_truth_data[pushing_scenario_index][object_index]
 
             #get push direction
             point_1_obj_coords = p_utils.get_object_space_point(point_1, start_position, start_orientation)
@@ -251,14 +249,15 @@ def proposed_search_method(pushing_scenarios, number_of_objects, object_rotation
             '''
 
             # update COM changes
-            '''learning_rate = 0.3*min_range_magn  #single-object learning rate
-            if number_of_objects > 1:
-                learning_rate = 1.5*min_range_magn #clutter learning rate'''
-            learning_rate = 2.*min_range_magn * (0.95**(float(len(accumulated_COMs_list))))
+            base_learning_rate = .2  #single-object learning rate
+            '''if number_of_objects > 1:
+                base_learning_rate = .4 #clutter learning rate'''
+            learning_rate = base_learning_rate * (0.95**(float(len(accumulated_COMs_list))))
             single_push_COM_change = learning_rate * basic_change_to_com
             COM_changes += single_push_COM_change
             # print("sim_angle,gt_angle",sim_angle,gt_angle)
-            print("u used",u_perpendicular_to_push_dir)
+            #print("u used",u_perpendicular_to_push_dir)
+            print(object_index, pushing_scenario_object_targets[pushing_scenario_index])
             print("single_push_COM_change",single_push_COM_change,"\t\t","sim_angle",sim_angle,"\tgt_angle",gt_angle)
 
         # define new COM for this object
@@ -286,7 +285,7 @@ def proposed_search_method(pushing_scenarios, number_of_objects, object_rotation
 
 
 
-def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios, starting_data, ground_truth_data,
+def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios, pushing_scenario_object_targets, starting_data, ground_truth_data,
              object_rotation_axes, object_types, current_COMs_list, method_to_use,
              view_matrix=None, proj_matrix=None):
 
@@ -319,7 +318,7 @@ def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios
         update_losses(losses, iter_num, number_of_objects, number_of_pushing_scenarios, object_types, this_scene_data, ground_truth_data)
 
         #update the COMs
-        current_COMs_list = method_to_use(pushing_scenarios, number_of_objects, object_rotation_axes, object_types,
+        current_COMs_list = method_to_use(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
                                           starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses)
 
     return losses, accumulated_COMs_list, simulated_data_list

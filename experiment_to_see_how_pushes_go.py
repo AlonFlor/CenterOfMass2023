@@ -29,7 +29,7 @@ def scene_run(scene_data, COMs_list, pushing_scenario, starting_data, object_rot
     return sim_angle
 
 
-def run_experiment(scene, pushing_scenario_index):
+def run_experiment(scene, pushing_scenario_index, axis_0_index, axis_1_index, directory):
     scene_loc = os.path.join("scenes", scene, "scene.csv")
     scene_data = file_handling.read_csv_file(scene_loc, [str, float, float, float, float, float, float, float, float, float, float, int])
 
@@ -54,17 +54,28 @@ def run_experiment(scene, pushing_scenario_index):
 
     #create grid of coms to check
     com_x_range,com_y_range,com_z_range = simulation_and_display.object_type_com_bounds_and_test_points[object_types[0]]["com_bounds"]#["full_bounds"]
-    offset = 0.02
+    offset = 0.#02
 
+    x_range = np.linspace(com_x_range[0]+offset, com_x_range[1]-offset, 15)
     y_range = np.linspace(com_y_range[0]+offset, com_y_range[1]-offset, 15)
     z_range = np.linspace(com_z_range[0]+offset, com_z_range[1]-offset, 15)
 
+    ranges = [x_range, y_range, z_range]
+    range_names = ["x_coord", "y_coord", "z_coord"]
+
+    range_0 = ranges[axis_0_index]
+    range_0_name = range_names[axis_0_index]
+    range_1 = ranges[axis_1_index]
+    range_1_name = range_names[axis_1_index]
+
     data_to_graph = []
-    for y_coord in y_range:
+    for range_1_coord in range_1:
         data_to_graph_row = []
-        for z_coord in z_range:
-            print(y_coord,z_coord)
-            generated_com = np.array([0., y_coord, z_coord])
+        for range_0_coord in range_0:
+            print(range_0_coord,range_1_coord)
+            generated_com = np.array([0., 0., 0.])
+            generated_com[axis_0_index]=range_0_coord
+            generated_com[axis_1_index]=range_1_coord
             # get the value for the COM along the rotation axis.
             generated_com[rotation_axis_index] = simulation_and_display.get_com_value_along_rotation_axis(object_types[0], rotation_axis_index, axis_sign)
 
@@ -76,13 +87,15 @@ def run_experiment(scene, pushing_scenario_index):
 
     draw_data.plt.imshow(data_to_graph, cmap='binary')
     draw_data.plt.colorbar()
-    draw_data.plt.xlabel("z coord")
-    draw_data.plt.xticks(range(len(z_range)),[str(round(z_coord,4)) for z_coord in z_range],rotation=90)#draw_data.plt.xticks()[0],)
-    draw_data.plt.ylabel("y coord")
-    draw_data.plt.yticks(range(len(y_range)),[str(round(y_coord,4)) for y_coord in y_range])#(draw_data.plt.yticks()[0],)
-    draw_data.plt.show()
-    #results_file_path = "experiment.csv"
-    #file_handling.write_csv_file(results_file_path, "y,z,theta", data_to_graph)
+    draw_data.plt.xlabel(range_0_name)
+    draw_data.plt.xticks(range(len(range_0)),[str(round(range_0_coord,4)) for range_0_coord in range_0],rotation=90)#draw_data.plt.xticks()[0],)
+    draw_data.plt.ylabel(range_1_name)
+    draw_data.plt.yticks(range(len(range_1)),[str(round(range_1_coord,4)) for range_1_coord in range_1])#(draw_data.plt.yticks()[0],)
+    figure = draw_data.plt.gcf()
+    figure.set_size_inches(32,18)
+    #draw_data.plt.show()
+    draw_data.plt.savefig(os.path.join(directory,f"push_{pushing_scenario_index}"), bbox_inches='tight')
+    draw_data.plt.close("all")
 
 
 
@@ -90,12 +103,15 @@ physicsClient = p.connect(p.DIRECT)
 #physicsClient = p.connect(p.GUI)
 p.setGravity(0, 0, -9.8)
 
-scene = "cracker_box"
-#run_experiment(scene, 0)
-#run_experiment(scene, 1)
-#run_experiment(scene, 2)
-#run_experiment(scene, 3)
-#run_experiment(scene, 4)
-run_experiment(scene, 5)
+scene = "bleach_cleanser"
+directory = "D:\Desktop\\bleach_cleanser_grid_search_2"
+first_axis_index = 0
+second_axis_index = 2
+run_experiment(scene, 0, first_axis_index, second_axis_index, directory)
+run_experiment(scene, 1, first_axis_index, second_axis_index, directory)
+run_experiment(scene, 2, first_axis_index, second_axis_index, directory)
+run_experiment(scene, 3, first_axis_index, second_axis_index, directory)
+run_experiment(scene, 4, first_axis_index, second_axis_index, directory)
+run_experiment(scene, 5, first_axis_index, second_axis_index, directory)
 
 p.disconnect()

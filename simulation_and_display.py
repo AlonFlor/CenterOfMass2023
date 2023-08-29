@@ -14,12 +14,11 @@ num_test_points_per_object = 125 #want to change this? Adjust the number in the 
 object_type_com_bounds_and_test_points = {}
 object_type_com_bounds_and_test_points["cracker_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("cracker_box", 0.7, 0.7, 0.7)
 object_type_com_bounds_and_test_points["master_chef_can"] = p_utils.get_com_bounds_and_test_points_for_object_type("master_chef_can", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["adjustable_wrench"] = p_utils.get_com_bounds_and_test_points_for_object_type("adjustable_wrench", 0.7, 0.7, 0.7)
 object_type_com_bounds_and_test_points["pudding_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("pudding_box", 0.7, 0.7, 0.7)
 object_type_com_bounds_and_test_points["sugar_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("sugar_box", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["mustard_bottle"] = p_utils.get_com_bounds_and_test_points_for_object_type("mustard_bottle", 0.7, 1.0, 0.7)
+object_type_com_bounds_and_test_points["mustard_bottle"] = p_utils.get_com_bounds_and_test_points_for_object_type("mustard_bottle", 0.7, 1.0, 0.6)
 object_type_com_bounds_and_test_points["bleach_cleanser"] = p_utils.get_com_bounds_and_test_points_for_object_type("bleach_cleanser", 0.5, 1.0, 0.7)
-object_type_com_bounds_and_test_points["hammer"] = p_utils.get_com_bounds_and_test_points_for_object_type("hammer", 0.9, 0.9, 0.9)
+object_type_com_bounds_and_test_points["hammer"] = p_utils.get_com_bounds_and_test_points_for_object_type("hammer", 0.4, 0.9, 0.9)
 
 
 def get_com_value_along_rotation_axis(object_type, rotation_axis_index, axis_sign):

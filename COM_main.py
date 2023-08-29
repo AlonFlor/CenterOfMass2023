@@ -46,7 +46,7 @@ def scene_ground_truth_run(ground_truth_folder, scene_data, gt_coms, number_of_o
 
 
 
-def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this_dir, pushing_scenarios, pushing_scenario_indices, object_rotation_axes,
+def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this_dir, pushing_scenarios, pushing_scenario_object_targets, pushing_scenario_indices, object_rotation_axes,
                              COMs_list=None, ground_truth_COMs=None):
     starting_data = simulation_and_display.get_starting_data(basic_scene_data)
 
@@ -58,7 +58,7 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
     ground_truth_data = []
     for i in pushing_scenario_indices:
         ground_truth_data_file = os.path.join(test_dir, f"ground_truth_push_{i}", "push_data.csv")
-        ground_truth_data_raw = file_handling.read_numerical_csv_file(ground_truth_data_file)
+        ground_truth_data_raw = file_handling.read_numerical_csv_file(ground_truth_data_file).reshape((number_of_objects,7))
         ground_truth_data_this_push = []
         for object_index in np.arange(number_of_objects):
             pos = ground_truth_data_raw[object_index][0:3]
@@ -102,7 +102,8 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
             os.mkdir(method_dir)
             losses, accumulated_COMs_list, simulated_data_list = \
                 COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
-                                            pushing_scenarios, starting_data, ground_truth_data,
+                                            pushing_scenarios, pushing_scenario_object_targets,
+                                            starting_data, ground_truth_data,
                                             object_rotation_axes, object_types,
                                             current_COMs_list, available_methods[method_name]
                                             #,view_matrix=view_matrix, proj_matrix=proj_matrix
@@ -192,10 +193,12 @@ def full_run_one_scene(scene, num_train_test_sessions):
     pushing_scenarios_array = file_handling.read_numerical_csv_file(os.path.join("scenes", scene, "pushing_scenarios.csv"))
     pushing_scenarios = []
     pushing_scenario_class_indices = []
+    pushing_scenario_object_targets = []
     current_class = 0
     current_class_identifier = None
     for i in np.arange(pushing_scenarios_array.shape[0]):
         pushing_scenarios.append((pushing_scenarios_array[i][:3], pushing_scenarios_array[i][3:6]))
+        pushing_scenario_object_targets.append(int(pushing_scenarios_array[i][6]))
         if i==0:
             current_class_identifier = pushing_scenarios_array[i][6:]
         elif (current_class_identifier[0] != pushing_scenarios_array[i][6]) or (current_class_identifier[1] != pushing_scenarios_array[i][7]):
@@ -212,7 +215,7 @@ def full_run_one_scene(scene, num_train_test_sessions):
 
 
     #get the ground truth COMs
-    #TODO: create mechanism for checking IRL ground truth and pasting the results of that
+    #TODO: create mechanism for checking IRL ground truth and pasting the results of that. It will probably need to be a separate function.
     ground_truth_COMs = []
     for i,object_data in enumerate(scene_data):
         ground_truth_COMs.append(np.array(object_data[1:4]))
@@ -247,7 +250,7 @@ def full_run_one_scene(scene, num_train_test_sessions):
         os.mkdir(scene_ground_truth_folder)
 
         #generate the ground truth
-        scene_ground_truth_run(scene_ground_truth_folder, scene_data, ground_truth_COMs, 1, pushing_scenario, object_rotation_axes)
+        scene_ground_truth_run(scene_ground_truth_folder, scene_data, ground_truth_COMs, number_of_objects, pushing_scenario, object_rotation_axes)
 
 
 
@@ -280,19 +283,24 @@ def full_run_one_scene(scene, num_train_test_sessions):
     for train_test_session_index, training_pushes_set in enumerate(training_pushes_sets):
         #separate pushing scenarios into training and testing sets
         pushing_scenarios_training = []
-        pushing_scenarios_testing = []
+        pushing_scenario_training_object_targets = []
         for pushing_scenario_index in training_pushes_set:
             pushing_scenarios_training.append(pushing_scenarios[pushing_scenario_index])
+            pushing_scenario_training_object_targets.append(pushing_scenario_object_targets[pushing_scenario_index])
+        pushing_scenarios_testing = []
+        pushing_scenario_testing_object_targets = []
         testing_pushes_set = []
         for i,pushing_scenario in enumerate(pushing_scenarios):
             if i not in training_pushes_set:
                 pushing_scenarios_testing.append(pushing_scenario)
+                pushing_scenario_testing_object_targets.append(pushing_scenario_object_targets[i])
                 testing_pushes_set.append(i)
 
         #train to get the COMs for each method
         training_dir = os.path.join(test_dir,f"test_session_{train_test_session_index}_training")
         os.mkdir(training_dir)
-        run_a_train_test_session(scene_data, number_of_objects, test_dir, training_dir, pushing_scenarios_training, training_pushes_set, object_rotation_axes,
+        run_a_train_test_session(scene_data, number_of_objects, test_dir, training_dir, pushing_scenarios_training, pushing_scenario_training_object_targets,
+                                 training_pushes_set, object_rotation_axes,
                                  ground_truth_COMs=ground_truth_COMs)
 
         #read COM data from training
@@ -312,7 +320,8 @@ def full_run_one_scene(scene, num_train_test_sessions):
         #test on pushes not used for training
         testing_dir = os.path.join(test_dir,f"test_session_{train_test_session_index}_testing")
         os.mkdir(testing_dir)
-        run_a_train_test_session(scene_data, number_of_objects, test_dir, testing_dir, pushing_scenarios_testing, testing_pushes_set, object_rotation_axes, COMs_list=COMs_list)
+        run_a_train_test_session(scene_data, number_of_objects, test_dir, testing_dir, pushing_scenarios_testing, pushing_scenario_testing_object_targets,
+                                 testing_pushes_set, object_rotation_axes, COMs_list=COMs_list)
 
 
     ##make graphs and videos
@@ -320,15 +329,21 @@ def full_run_one_scene(scene, num_train_test_sessions):
                                                   scene_data, object_rotation_axes, view_matrix, proj_matrix)
 
 
-full_run_one_scene("cracker_box",5)
 #full_run_one_scene("hammer",5)
+#full_run_one_scene("mustard_bottle",5)
+#full_run_one_scene("bleach_cleanser",5)
+
+#full_run_one_scene("cracker_box",5)
+#full_run_one_scene("sugar_box",5)
 #full_run_one_scene("pudding_box",5)
 #full_run_one_scene("master_chef_can",5)
 
-#full_run_one_scene("sugar_box",5)
 
 
-#full_run_one_scene("mustard_bottle",5)
+#full_run_one_scene("clutter_1",1)
+#full_run_one_scene("clutter_2",1)
+full_run_one_scene("clutter_3",1)
+
 
 #full_run_one_scene(os.path.join("scenes","scene_cracker_boxes_clutter.csv"), 4)
 #full_run_one_scene(os.path.join("scenes","scene_cracker_box.csv"), 1)

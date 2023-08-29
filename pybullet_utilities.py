@@ -673,7 +673,7 @@ def make_pushing_scenarios_and_get_object_rotation_axes(original_scene_data, pus
         pushing_scenarios_this_object = []
 
         target_pos, target_orn = starting_data[object_index]
-        target_bounds = object_type_com_bounds_and_test_points[mobile_object_types[0]]["full_bounds"]
+        target_bounds = object_type_com_bounds_and_test_points[mobile_object_types[object_index]]["full_bounds"]
         rotation_axis_index = object_rotation_axes[object_index][0]
 
         # get bounds not in rotation axis
@@ -699,6 +699,7 @@ def make_pushing_scenarios_and_get_object_rotation_axes(original_scene_data, pus
         axis1_shift[axis1_index] = axis_shift
         edges = [(points[0] - axis1_shift, points[1] - axis1_shift), (points[2] + axis1_shift, points[3] + axis1_shift),
                  (points[0] - axis0_shift, points[2] - axis0_shift), (points[1] + axis0_shift, points[3] + axis0_shift)]
+        print(mobile_object_types[object_index],"\t",edges,"\n")
         # edge 0 parallel to edge 1          edge 2 parallel to edge 3
 
         # generate the points needed to be candidates for pusher starting positions or for pusher directions
@@ -707,8 +708,12 @@ def make_pushing_scenarios_and_get_object_rotation_axes(original_scene_data, pus
             #scaled_candidate_locs = np.linspace(0.45,0.55, pushes_per_object_direction)
             scaled_candidate_locs = np.linspace(0.25,0.75, pushes_per_object_direction)
 
-            candidates.append([[scl * edges[2*i+1][0] + (1. - scl) * edges[2*i+1][1],
-                                scl * edges[2*i][0] + (1. - scl) * edges[2*i][1]] for scl in scaled_candidate_locs])
+            if mobile_object_types[object_index] == "mustard_bottle" or mobile_object_types[object_index] == "bleach_cleanser":
+                candidates.append([[scl * edges[2*i][0] + (1. - scl) * edges[2*i][1],
+                                    scl * edges[2*i+1][0] + (1. - scl) * edges[2*i+1][1]] for scl in scaled_candidate_locs])
+            else:
+                candidates.append([[scl * edges[2*i+1][0] + (1. - scl) * edges[2*i+1][1],
+                                    scl * edges[2*i][0] + (1. - scl) * edges[2*i][1]] for scl in scaled_candidate_locs])
 
         # get the world coordinates of the candidate points
         candidates_wc = []
@@ -724,19 +729,21 @@ def make_pushing_scenarios_and_get_object_rotation_axes(original_scene_data, pus
             pushing_scenarios_this_object_this_side = []
             filtered_candidate_pairs = []
             for candidate_pair in candidates_wc[i]:
-                # test the canddiate pair
+                # test the candidate pair
                 p.resetBasePositionAndOrientation(cylinderID, candidate_pair[0] + cylinder_height_offset, (0., 0., 0., 1.))
                 p.performCollisionDetection()
-                #time.sleep(4.)
                 contact_results = p.getContactPoints(cylinderID)
+                print("contact_results",contact_results)
+                time.sleep(4.)
                 if len(contact_results) == 0:
                     filtered_candidate_pairs.append(candidate_pair)
                 else:
                     # if this pair was rejected, switch the points and test again. Maybe the second point in the pair would fit as a starting point.
                     p.resetBasePositionAndOrientation(cylinderID, candidate_pair[1] + cylinder_height_offset, (0., 0., 0., 1.))
                     p.performCollisionDetection()
-                    #time.sleep(4.)
                     contact_results = p.getContactPoints(cylinderID)
+                    print("\tcontact_results",contact_results)
+                    time.sleep(4.)
                     if len(contact_results) == 0:
                         filtered_candidate_pairs.append([candidate_pair[1], candidate_pair[0]])
             for candidate_pair in filtered_candidate_pairs:
