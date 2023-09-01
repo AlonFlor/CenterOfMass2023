@@ -5,6 +5,25 @@ import pybullet_utilities as p_utils
 import os
 import simulation_and_display
 
+base_learning_rates = {}
+base_learning_rates["cracker_box"] = 0.25
+base_learning_rates["master_chef_can"] = 0.03
+base_learning_rates["pudding_box"] = 0.03
+base_learning_rates["sugar_box"] = 0.1
+base_learning_rates["mustard_bottle"] = 0.15
+base_learning_rates["bleach_cleanser"] = 0.15
+base_learning_rates["hammer"] = 0.1
+
+base_learning_rates_clutter = {}
+base_learning_rates_clutter["cracker_box"] = 1.75*base_learning_rates["cracker_box"]
+base_learning_rates_clutter["master_chef_can"] = 1.5*base_learning_rates["master_chef_can"]
+base_learning_rates_clutter["pudding_box"] = 3.*base_learning_rates["pudding_box"]
+base_learning_rates_clutter["sugar_box"] = 3.*base_learning_rates["sugar_box"]
+base_learning_rates_clutter["mustard_bottle"] = 1.75*base_learning_rates["mustard_bottle"]
+base_learning_rates_clutter["bleach_cleanser"] = 1.75*base_learning_rates["bleach_cleanser"]
+base_learning_rates_clutter["hammer"] = 1.5*base_learning_rates["hammer"]
+
+
 def get_loss_for_object(data_sim, data_gt, test_points):
     '''Calculate the planar loss as the sum of distances between simulated and ground truth for test points for the object.'''
     loss = 0.
@@ -248,17 +267,17 @@ def proposed_search_method(pushing_scenarios, pushing_scenario_object_targets, n
             It requires the push direction, which can be obtained from the pushing scenario.
             '''
 
-            # update COM changes
-            base_learning_rate = .2  #single-object learning rate
-            '''if number_of_objects > 1:
-                base_learning_rate = .4 #clutter learning rate'''
+            # update COM changes1.75
+            base_learning_rate = base_learning_rates[object_types[object_index]]  #single-object learning rate
+            if number_of_objects > 1:
+                base_learning_rate = base_learning_rates_clutter[object_types[object_index]] #clutter learning rate
             learning_rate = base_learning_rate * (0.95**(float(len(accumulated_COMs_list))))
             single_push_COM_change = learning_rate * basic_change_to_com
             COM_changes += single_push_COM_change
-            # print("sim_angle,gt_angle",sim_angle,gt_angle)
+            #print("sim_angle,gt_angle",sim_angle,gt_angle)
             #print("u used",u_perpendicular_to_push_dir)
-            print(object_index, pushing_scenario_object_targets[pushing_scenario_index])
-            print("single_push_COM_change",single_push_COM_change,"\t\t","sim_angle",sim_angle,"\tgt_angle",gt_angle)
+            #print(object_index, pushing_scenario_object_targets[pushing_scenario_index], object_types[object_index])
+            #print("single_push_COM_change",single_push_COM_change,"\t\t","sim_angle",sim_angle,"\tgt_angle",gt_angle)
 
         # define new COM for this object
         new_COM = current_object_COM + COM_changes

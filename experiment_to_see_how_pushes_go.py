@@ -103,8 +103,8 @@ physicsClient = p.connect(p.DIRECT)
 #physicsClient = p.connect(p.GUI)
 p.setGravity(0, 0, -9.8)
 
-scene = "bleach_cleanser"
-directory = "D:\Desktop\\bleach_cleanser_grid_search_2"
+scene = "mustard_bottle"
+directory = "D:\Desktop\\mustard_bottle_grid_search"
 first_axis_index = 0
 second_axis_index = 2
 run_experiment(scene, 0, first_axis_index, second_axis_index, directory)

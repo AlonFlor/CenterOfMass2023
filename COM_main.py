@@ -329,20 +329,23 @@ def full_run_one_scene(scene, num_train_test_sessions):
                                                   scene_data, object_rotation_axes, view_matrix, proj_matrix)
 
 
-#full_run_one_scene("hammer",5)
-#full_run_one_scene("mustard_bottle",5)
-#full_run_one_scene("bleach_cleanser",5)
 
 #full_run_one_scene("cracker_box",5)
 #full_run_one_scene("sugar_box",5)
 #full_run_one_scene("pudding_box",5)
 #full_run_one_scene("master_chef_can",5)
 
+#full_run_one_scene("hammer",5)
+#full_run_one_scene("mustard_bottle",5)
+#full_run_one_scene("bleach_cleanser",5)
 
 
+#TODO run these with n=5
 #full_run_one_scene("clutter_1",1)
 #full_run_one_scene("clutter_2",1)
-full_run_one_scene("clutter_3",1)
+#full_run_one_scene("clutter_3",1)
+
+#TODO rerun everything for just the drawings so I can have them without the constantly repeating legend, and so I can combine them.
 
 
 #full_run_one_scene(os.path.join("scenes","scene_cracker_boxes_clutter.csv"), 4)

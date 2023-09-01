@@ -734,7 +734,7 @@ def make_pushing_scenarios_and_get_object_rotation_axes(original_scene_data, pus
                 p.performCollisionDetection()
                 contact_results = p.getContactPoints(cylinderID)
                 print("contact_results",contact_results)
-                time.sleep(4.)
+                #time.sleep(4.)
                 if len(contact_results) == 0:
                     filtered_candidate_pairs.append(candidate_pair)
                 else:
@@ -743,7 +743,7 @@ def make_pushing_scenarios_and_get_object_rotation_axes(original_scene_data, pus
                     p.performCollisionDetection()
                     contact_results = p.getContactPoints(cylinderID)
                     print("\tcontact_results",contact_results)
-                    time.sleep(4.)
+                    #time.sleep(4.)
                     if len(contact_results) == 0:
                         filtered_candidate_pairs.append([candidate_pair[1], candidate_pair[0]])
             for candidate_pair in filtered_candidate_pairs:
