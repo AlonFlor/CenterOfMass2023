@@ -273,6 +273,12 @@ def get_world_space_point(point, position, orientation):
 def get_object_space_point(point, position, orientation):
     return rotate_vector(point-position, quat_inverse(orientation))
 
+def get_rotation_between_vectors(v1, v2):
+    v_new = np.cross(v1, v2)
+    w = np.sqrt((np.linalg.norm(v1)**2) * (np.linalg.norm(v2)**2)) + np.dot(v1, v2)
+    q_result = np.array([v_new[0], v_new[1], v_new[2], w])
+    return q_result / np.linalg.norm(q_result)
+
 
 def get_objects_positions_and_orientations(mobile_object_IDs):
     # Position is that of object's origin according to its .obj file, rather than the origin of the pybullet object.
@@ -648,6 +654,15 @@ def get_pushing_points(point_1_basic, point_2_basic, cylinder_height_offset, pus
     point_2 = push_distance * direction_normalized + point_1
     return point_1, point_2
 
+def get_object_rotation_axes(starting_data):
+    object_rotation_axes = []
+    for i in np.arange(len(starting_data)):
+        rotated_z_vector = rotate_vector(np.array([0., 0., 1.]), quat_inverse(starting_data[i][1]))
+        direction_index = np.argmax(np.abs(rotated_z_vector))
+        axis_sign = np.sign(rotated_z_vector[direction_index])
+        object_rotation_axes.append((direction_index, axis_sign))
+    return object_rotation_axes
+
 import time
 def make_pushing_scenarios_and_get_object_rotation_axes(original_scene_data, pushes_per_object_direction, cylinder_height_offset, push_distance, object_type_com_bounds_and_test_points,
                                                         shift_plane=None):
@@ -661,12 +676,7 @@ def make_pushing_scenarios_and_get_object_rotation_axes(original_scene_data, pus
     p.resetSimulation()
 
     # get the index of the object coords version of the world coords z-axis, and the sign of the world coords z-axis in object coords
-    object_rotation_axes = []
-    for i in np.arange(len(starting_data)):
-        rotated_z_vector = rotate_vector(np.array([0., 0., 1.]), quat_inverse(starting_data[i][1]))
-        direction_index = np.argmax(np.abs(rotated_z_vector))
-        axis_sign = np.sign(rotated_z_vector[direction_index])
-        object_rotation_axes.append((direction_index, axis_sign))
+    object_rotation_axes = get_object_rotation_axes(starting_data)
 
     pushing_scenarios = []
     for object_index in np.arange(len(starting_data)):

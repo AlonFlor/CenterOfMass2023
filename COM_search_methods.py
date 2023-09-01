@@ -267,7 +267,7 @@ def proposed_search_method(pushing_scenarios, pushing_scenario_object_targets, n
             It requires the push direction, which can be obtained from the pushing scenario.
             '''
 
-            # update COM changes1.75
+            # update COM changes
             base_learning_rate = base_learning_rates[object_types[object_index]]  #single-object learning rate
             if number_of_objects > 1:
                 base_learning_rate = base_learning_rates_clutter[object_types[object_index]] #clutter learning rate

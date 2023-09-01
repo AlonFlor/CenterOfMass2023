@@ -341,11 +341,14 @@ def full_run_one_scene(scene, num_train_test_sessions):
 
 
 #TODO run these with n=5
-#full_run_one_scene("clutter_1",1)
-#full_run_one_scene("clutter_2",1)
-#full_run_one_scene("clutter_3",1)
+full_run_one_scene("clutter_1",5)
+full_run_one_scene("clutter_2",5)
+full_run_one_scene("clutter_3",5)
 
-#TODO rerun everything for just the drawings so I can have them without the constantly repeating legend, and so I can combine them.
+#TODO rerun everything for just the drawings so I can combine them.
+#   Also get rid of random sampling (keep random search)
+#   Apply the same thing I did to random search to all other searches: take the best-so-far for graphing
+#   Actually keep the legend (restore it)
 
 
 #full_run_one_scene(os.path.join("scenes","scene_cracker_boxes_clutter.csv"), 4)
