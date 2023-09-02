@@ -87,7 +87,7 @@ def plot_multiple_variables(var_x, var_x_name, var_y_name, vars_to_plot, var_err
         avg = vars_to_plot[i].flatten()
         flattened_errors = var_errors[i].flatten()
         plt.fill_between(var_x, avg+flattened_errors, avg-flattened_errors, color=styles[i][1:], alpha=0.2)
-    #plt.legend(loc='upper right', shadow=True, fontsize='x-large')
+    plt.legend(loc='upper right', shadow=True, fontsize='x-large')
     if out_dir is not None:
         plt.savefig(os.path.join(out_dir, title))
     if show:
