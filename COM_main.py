@@ -17,7 +17,7 @@ available_methods = {"proposed_method": COM_search_methods.proposed_search_metho
                      "random_sampling": COM_search_methods.random_sampling,
                      "Gaussian_process": COM_search_methods.Gaussian_Process_sampling,
                      "simplified_CEM": COM_search_methods.simplified_cross_entropy_method_sampling}
-number_of_iterations = 25#50
+number_of_iterations = 4#25#50      #TODO restore to 25
 
 
 def scene_ground_truth_run(ground_truth_folder, scene_data, gt_coms, number_of_objects, pushing_scenario, object_rotation_axes):
@@ -43,13 +43,15 @@ def scene_ground_truth_run(ground_truth_folder, scene_data, gt_coms, number_of_o
 
 
 
-def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this_dir, pushing_scenarios, pushing_scenario_object_targets, pushing_scenario_indices, object_rotation_axes,
-                             COMs_list=None, ground_truth_COMs=None):
+def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this_dir,
+                             pushing_scenarios, pushing_scenario_object_targets, pushing_scenario_indices, object_rotation_axes,
+                             COMs_list=None, ground_truth_COMs=None, shift_plane=(0.,0.,0.), scene_starts=None):
     starting_data = simulation_and_display.get_starting_data(basic_scene_data)
 
     #print this session's pushing scenarios
     pushing_scenarios_file = os.path.join(this_dir, "pushing_scenario_indices.csv")
     file_handling.write_csv_file(pushing_scenarios_file, "index of original scene pushing scenario", np.array(pushing_scenario_indices).reshape((len(pushing_scenario_indices),1)))
+    print("pushing_scenario_indices",pushing_scenario_indices)
 
     #get ground truth motion data
     ground_truth_data = []
@@ -90,7 +92,7 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
             else:
                 current_COMs_list.append(ground_truth_COMs[i])'''
             current_COMs_list.append(generated_com)
-        #print(current_COMs_list)
+        #print("current_COMs_list",current_COMs_list)
 
         #run the simulations
         for i,method_name in enumerate(available_methods.keys()):
@@ -102,9 +104,9 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
                                             pushing_scenarios, pushing_scenario_object_targets,
                                             starting_data, ground_truth_data,
                                             object_rotation_axes, object_types,
-                                            current_COMs_list, available_methods[method_name]
-                                            #,view_matrix=view_matrix, proj_matrix=proj_matrix
-                                            )
+                                            current_COMs_list, available_methods[method_name],
+                                            view_matrix=view_matrix, proj_matrix=proj_matrix, #TODO close these
+                                            shift_plane=shift_plane, scene_starts=scene_starts)
 
             losses_across_methods.append(losses)
             simulated_data_across_methods.append(simulated_data_list)
@@ -136,9 +138,9 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
             os.mkdir(method_dir)
             losses, simulated_data_list = \
                 COM_search_methods.test_COMs(number_of_iterations, method_dir, basic_scene_data, pushing_scenarios, starting_data,
-                                             ground_truth_data, object_types, COMs_list[i]
+                                             ground_truth_data, object_types, COMs_list[i],
                                              #,view_matrix=view_matrix, proj_matrix=proj_matrix
-                                             )
+                                             scene_starts=scene_starts)
             losses_across_methods.append(losses)
             simulated_data_across_methods.append(simulated_data_list)
 
@@ -329,12 +331,13 @@ def full_run_one_scene(scene, num_train_test_sessions):
                                                   scene_data, object_rotation_axes, view_matrix, proj_matrix)
 
 
-def untilt_scene(scene_data, object_types, number_of_objects, shift_plane):
+def untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shift_plane, ground_truth_folder=None, pushing_scenario=None, push_object_target=None):
+    #print lab scene as ground truth for push after
+
     # give objects placeholder COMs at their geometric centers so they can be rotated from tilted to on the horizontal plane
     object_centers = []
     for object_index in np.arange(number_of_objects):
-        object_bounds = simulation_and_display.object_type_com_bounds_and_test_points[object_types[object_index]][
-            "full_bounds"]
+        object_bounds = simulation_and_display.object_type_com_bounds_and_test_points[object_types[object_index]]["full_bounds"]
         object_centers.append(0.5 * (np.array([object_bounds[0][0], object_bounds[1][0], object_bounds[2][0]]) +
                                      np.array([object_bounds[0][1], object_bounds[1][1], object_bounds[2][1]])))
     scene_data = p_utils.scene_data_change_COMs(scene_data, object_centers)
@@ -348,7 +351,8 @@ def untilt_scene(scene_data, object_types, number_of_objects, shift_plane):
     adjusted_scene_data = p_utils.get_objects_positions_and_orientations(mobile_object_IDs)
     object_rotation_axes = p_utils.get_object_rotation_axes(adjusted_scene_data)
 
-    # rotate objects so that their rotation axis is aligned with the world coordinates z-axis.
+    # untilt, which means rotate objects so that their rotation axis is aligned with the world coordinates z-axis.
+    rotations_to_planar = []
     for object_index in np.arange(number_of_objects):
         rotation_axis_index, axis_sign = object_rotation_axes[object_index]
         pos, orn = p.getBasePositionAndOrientation(mobile_object_IDs[object_index])
@@ -356,11 +360,52 @@ def untilt_scene(scene_data, object_types, number_of_objects, shift_plane):
         rotation_axis = np.array([0., 0., 0.])
         rotation_axis[rotation_axis_index] = axis_sign
         rotation_to_planar = p_utils.get_rotation_between_vectors(rotation_axis, rotated_z_vector)
+        rotations_to_planar.append(rotation_to_planar)
         new_orn = p_utils.quaternion_multiplication(orn, rotation_to_planar)
         for i in np.arange(4):
             scene_data[object_index][7 + i] = new_orn[i]
+
+    #TODO rotate pushes so that they remain perpendicular to objects
+    #   to do this, we will need to define a vector from the object center to the old pushing point.
+    #   then, we will need to rotate that vector using the quaternion
+    #   finally, we add the object center to the rotated vector to get the new pushing point.
+
+    #untilt pushing scenario
+    if pushing_scenario is not None:
+        start, end = pushing_scenario
+        pos, orn = p.getBasePositionAndOrientation(mobile_object_IDs[push_object_target])
+        object_center_wc = p_utils.get_world_space_point(object_centers[push_object_target], pos, orn)
+
+        start_vector = start - object_center_wc
+        new_start_vector = p_utils.rotate_vector(start_vector, rotations_to_planar[push_object_target])
+        new_start = new_start_vector + object_center_wc
+
+        end_vector = end - object_center_wc
+        new_end_vector = p_utils.rotate_vector(end_vector, rotations_to_planar[push_object_target])
+        new_end = new_end_vector + object_center_wc
+
+        new_pushing_scenario = [start, end] #[new_start, new_end]           TODO: see why the new versions do not work.
+
+    # if the lab scene is post-push, print the ground truth data to a csv file
+    if ground_truth_folder is not None:
+        adjusted_scene_data = p_utils.get_objects_positions_and_orientations(mobile_object_IDs)
+
+        row_of_numbers = []
+        for object_index in np.arange(number_of_objects):
+            row_of_numbers += list(adjusted_scene_data[object_index][0])
+            row_of_numbers += adjusted_scene_data[object_index][1]
+        gt_data_array = np.array([row_of_numbers])
+        file_path = os.path.join(ground_truth_folder, f"push_data.csv")
+        file_handling.write_csv_file(file_path, "x,y,z,orn_x,orn_y,orn_z,orn_w", gt_data_array)
+
+        simulation_and_display.make_images_simple(ground_truth_folder, scene_data, view_matrix, proj_matrix, extra_message="image", shift_plane=shift_plane)  # make images
+
     p.resetSimulation()
     p.setGravity(0, 0, -9.8)
+
+    if pushing_scenario is not None:
+        return scene_data, new_pushing_scenario
+    return scene_data
 
 
 
@@ -393,29 +438,6 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
         push_indices.append(int(line.strip().split("\t")[-1]))
     push_indices_file.close()
 
-    #get the start and end scenes for each push, with corrections for tilts
-    scene_starts = []
-    scene_ends = []
-    for i in np.arange(len(push_indices)):
-        #get start scene for push i
-        if i==0:
-            scene_loc = os.path.join("scenes", scene, "scene.csv")
-        else:
-            before_path = os.path.join("scenes", scene, f"scene_before_push_{i}.csv")
-            if os.path.isfile(before_path):
-                scene_loc = before_path
-            else:
-                scene_loc = os.path.join("scenes", scene, f"scene_after_push_{i-1}.csv")
-        scene_data = file_handling.read_csv_file(scene_loc, [str, float, float, float, float, float, float, float, float, float, float, int])[:-1]
-        untilt_scene(scene_data, object_types, number_of_objects, shift_plane)
-        scene_starts.append(scene_data)
-
-        #get end scene for push i
-        scene_loc = os.path.join("scenes", scene, f"scene_after_push_{i}.csv")
-        scene_data = file_handling.read_csv_file(scene_loc, [str, float, float, float, float, float, float, float, float, float, float, int])[:-1]
-        untilt_scene(scene_data, object_types, number_of_objects, shift_plane)
-        scene_ends.append(scene_data)
-
     #get the pushing scenarios
     pushing_scenario_files = []
     all_stuff = os.listdir(os.path.join("scenes", scene))
@@ -423,8 +445,15 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
         if thing.startswith("pushing_scenarios"):
             pushing_scenario_files.append(thing)
     pushing_scenarios = []
+    pushing_scenario_object_targets = []    #which objects are targeted by pushing scenarios
+    pushing_scenario_class_indices = []     #stuff to sort pushing scenarios by class
+    current_class = 0                       #stuff to sort pushing scenarios by class
+    current_class_identifier = None         #stuff to sort pushing scenarios by class
+    number_of_classes = 0                   #stuff to sort pushing scenarios by class
     for i in np.arange(len(pushing_scenario_files)):
         pushing_scenarios.append(None)
+        pushing_scenario_object_targets.append(None)
+        pushing_scenario_class_indices.append(None)
     for pushing_scenario_file_name in pushing_scenario_files:
         #ascertain the push index of this pushing scenarios file
         if pushing_scenario_file_name == "pushing_scenarios.csv":
@@ -445,34 +474,72 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
                     push_number += 1
                 push_number += 1
 
-        #get the pushing scenario from the file. Adjust the z-coordinates of the push
+        #get the pushing scenario from the file. Adjust the coordinates of the push
         pushing_scenarios_array = file_handling.read_numerical_csv_file(os.path.join("scenes", scene, pushing_scenario_file_name))
-        pos_start = pushing_scenarios_array[push_indices[push_number]][:3]
-        pos_end = pushing_scenarios_array[push_indices[push_number]][3:6]
+        push_index = push_indices[push_number]
+        pos_start = pushing_scenarios_array[push_index][:3]
+        pos_end = pushing_scenarios_array[push_index][3:6]
+        '''x_shift = 0.13
+        y_shift = 0.1
+        pos_start[0] += x_shift
+        pos_end[0] += x_shift
+        pos_start[1] += y_shift
+        pos_end[1] += y_shift'''
         pos_start[2] = shift_plane[2] + 0.02
         pos_end[2] = shift_plane[2] + 0.02
         print(pushing_scenarios[push_number])
-        pushing_scenarios[push_number] = (pos_start, pos_end)
+        pushing_scenarios[push_number] = [pos_start, pos_end]
+
+        #sort out the object target and class of the push
+        pushing_scenario_object_targets[push_number] = int(pushing_scenarios_array[push_index][6])
+        if current_class_identifier is None:
+            current_class_identifier = pushing_scenarios_array[push_index][6:]
+        elif (current_class_identifier[0] != pushing_scenarios_array[push_index][6]) or (current_class_identifier[1] != pushing_scenarios_array[push_index][7]):
+            current_class_identifier = pushing_scenarios_array[push_index][6:]
+            current_class += 1
+        pushing_scenario_class_indices[push_number] = current_class
+        number_of_classes = current_class + 1
     print(pushing_scenarios)
 
-    #TODO: need the actual push used for each pushing scenarios file
-    # will need to add the code from here to the code block before this one, since the code block before this one has access to the pushing scenario files.
-    #sort pushing scenarios by class
-    pushing_scenario_class_indices = []
-    pushing_scenario_object_targets = []
-    current_class = 0
-    current_class_identifier = None
-    for i in np.arange(len(pushing_scenarios)):
-        pushing_scenario_object_targets.append(int(pushing_scenarios_array[i][6]))
-        if i == 0:
-            current_class_identifier = pushing_scenarios_array[i][6:]
-        elif (current_class_identifier[0] != pushing_scenarios_array[i][6]) or (
-                current_class_identifier[1] != pushing_scenarios_array[i][7]):
-            current_class_identifier = pushing_scenarios_array[i][6:]
-            current_class += 1
-        pushing_scenario_class_indices.append(current_class)
-    number_of_classes = current_class + 1
 
+    #get the start and end scenes for each push, with corrections for tilts
+    scene_starts = []
+    scene_ends = []
+    for i in np.arange(len(pushing_scenarios)):
+        #get start scene for push i
+        if i==0:
+            scene_loc = os.path.join("scenes", scene, "scene.csv")
+        else:
+            before_path = os.path.join("scenes", scene, f"scene_before_push_{i}.csv")
+            if os.path.isfile(before_path):
+                scene_loc = before_path
+            else:
+                scene_loc = os.path.join("scenes", scene, f"scene_after_push_{i-1}.csv")
+        print("scene_loc start",scene_loc)
+        scene_data = file_handling.read_csv_file(scene_loc, [str, float, float, float, float, float, float, float, float, float, float, int])[:-1]
+        scene_data, new_push = untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shift_plane,
+                                                          pushing_scenario=pushing_scenarios[i], push_object_target=pushing_scenario_object_targets[i])
+        pushing_scenarios[i] = new_push
+        scene_starts.append(scene_data)
+
+        #get end scene for push i and print it
+        scene_loc = os.path.join("scenes", scene, f"scene_after_push_{i}.csv")
+        print("\tscene_loc end", scene_loc)
+        ground_truth_folder = os.path.join(test_dir, f"ground_truth_push_{i}")
+        os.mkdir(ground_truth_folder)
+        scene_data = file_handling.read_csv_file(scene_loc, [str, float, float, float, float, float, float, float, float, float, float, int])[:-1]
+        scene_data = untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shift_plane, ground_truth_folder=ground_truth_folder)
+        scene_ends.append(scene_data)
+
+    #get object rotation axes, they should be consistent across all scenes
+    mobile_object_IDs = []
+    mobile_object_types = []
+    held_fixed_list = []
+    p_utils.open_scene_data(scene_starts[0], mobile_object_IDs, mobile_object_types, held_fixed_list,shift_plane=shift_plane)
+    adjusted_scene_data = p_utils.get_objects_positions_and_orientations(mobile_object_IDs)
+    object_rotation_axes = p_utils.get_object_rotation_axes(adjusted_scene_data)
+    p.resetSimulation()
+    p.setGravity(0, 0, -9.8)
 
     #TODO: test pushes and see if they are any good
     #TODO: uncomment the code below that splits pushes into testing and training sets, and run (and debug) that code.
@@ -480,7 +547,7 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
     #       p_utils.open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane=shift_plane)
     #       make sure the shift plane value is passed on to run_attempt
 
-    '''# split pushes into training and testing sets. Randomly choose one push from each class to go into the training set. Number of training sets = num_train_test_sessions times.
+    # split pushes into training and testing sets. Randomly choose one push from each class to go into the training set. Number of training sets = num_train_test_sessions times.
     pushing_scenario_indices_by_class = []
     for i in np.arange(number_of_classes):
         pushing_scenario_indices_by_class.append([])
@@ -509,9 +576,12 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
     for train_test_session_index, training_pushes_set in enumerate(training_pushes_sets):
         # separate pushing scenarios into training and testing sets
         pushing_scenarios_training = []
+        training_scene_starts = []
+        testing_scene_starts = []
         pushing_scenario_training_object_targets = []
         for pushing_scenario_index in training_pushes_set:
             pushing_scenarios_training.append(pushing_scenarios[pushing_scenario_index])
+            training_scene_starts.append(scene_starts[pushing_scenario_index])
             pushing_scenario_training_object_targets.append(pushing_scenario_object_targets[pushing_scenario_index])
         pushing_scenarios_testing = []
         pushing_scenario_testing_object_targets = []
@@ -519,6 +589,7 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
         for i, pushing_scenario in enumerate(pushing_scenarios):
             if i not in training_pushes_set:
                 pushing_scenarios_testing.append(pushing_scenario)
+                testing_scene_starts.append(scene_starts[i])
                 pushing_scenario_testing_object_targets.append(pushing_scenario_object_targets[i])
                 testing_pushes_set.append(i)
 
@@ -527,7 +598,7 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
         os.mkdir(training_dir)
         run_a_train_test_session(scene_data, number_of_objects, test_dir, training_dir, pushing_scenarios_training,
                                  pushing_scenario_training_object_targets,
-                                 training_pushes_set, object_rotation_axes)
+                                 training_pushes_set, object_rotation_axes, shift_plane=shift_plane, scene_starts=training_scene_starts)
 
         # read COM data from training
         COMs_list = []
@@ -547,13 +618,15 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
         os.mkdir(testing_dir)
         run_a_train_test_session(scene_data, number_of_objects, test_dir, testing_dir, pushing_scenarios_testing,
                                  pushing_scenario_testing_object_targets,
-                                 testing_pushes_set, object_rotation_axes, COMs_list=COMs_list)
+                                 testing_pushes_set, object_rotation_axes, COMs_list=COMs_list, shift_plane=shift_plane, scene_starts=testing_scene_starts)
 
-    ##make graphs and videos
+    #TODO uncomment code
+    '''#make graphs and videos
     simulation_and_display.make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_iterations,
                                                   available_methods, scene_data, object_rotation_axes, view_matrix, proj_matrix)'''
 
-full_run_one_scene_lab("cracker_box_real",1)
+#full_run_one_scene_lab("cracker_box_real",1)
+full_run_one_scene_lab("bleach_cleanser_real",1)
 #full_run_one_scene_lab("clutter_1_real",1)
 
 #full_run_one_scene("cracker_box",5)

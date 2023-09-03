@@ -45,14 +45,14 @@ def get_starting_data(scene_data):
 
     return starting_data
 
-def run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix=None, proj_matrix=None):
+def run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix=None, proj_matrix=None, shift_plane=(0.,0.,0.)):
     mobile_object_IDs = []
     mobile_object_types = []
     held_fixed_list = []
 
     #start_time = time.perf_counter_ns()
 
-    p_utils.open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list)
+    p_utils.open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane)
 
     #push
     cylinderID = p_utils.create_cylinder(0.015 / 2, 0.05)
@@ -123,8 +123,19 @@ def display_COMs(mobile_object_IDs, sim_data, ranges_lists, object_rotation_axes
         p.createMultiBody(baseVisualShapeIndex = COM_display_shape, basePosition=COM_display_point_wc)
 
 
+def make_images_simple(scenario_dir, basic_scene_data, view_matrix, proj_matrix, extra_message="", shift_plane=None):
+    # open the scene
+    mobile_object_IDs = []
+    mobile_object_types = []
+    held_fixed_list = []
+    p_utils.open_scene_data(basic_scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane=shift_plane)
+
+    # print the image
+    p_utils.print_image(view_matrix, proj_matrix, scenario_dir, extra_message=extra_message)
+
+
 def make_images(scenario_dir, basic_scene_data, object_rotation_axes, view_matrix, proj_matrix, number_of_pushing_scenarios,
-                number_of_iterations=1, push_indices=None, gt_coms=None, number_of_objects=None):
+                number_of_iterations=1, push_indices=None, gt_coms=None, number_of_objects=None, shift_plane=None):
 
     for pushing_scenario_index in np.arange(number_of_pushing_scenarios):
         if gt_coms is not None:
@@ -150,7 +161,7 @@ def make_images(scenario_dir, basic_scene_data, object_rotation_axes, view_matri
             mobile_object_IDs = []
             mobile_object_types = []
             held_fixed_list = []
-            p_utils.open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list)
+            p_utils.open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane=shift_plane)
 
             ranges_lists = []
             for object_index in np.arange(len(mobile_object_IDs)):

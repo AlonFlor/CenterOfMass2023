@@ -275,9 +275,9 @@ def proposed_search_method(pushing_scenarios, pushing_scenario_object_targets, n
             single_push_COM_change = learning_rate * basic_change_to_com
             COM_changes += single_push_COM_change
             #print("sim_angle,gt_angle",sim_angle,gt_angle)
-            #print("u used",u_perpendicular_to_push_dir)
-            #print(object_index, pushing_scenario_object_targets[pushing_scenario_index], object_types[object_index])
-            #print("single_push_COM_change",single_push_COM_change,"\t\t","sim_angle",sim_angle,"\tgt_angle",gt_angle)
+            print("u used",u_perpendicular_to_push_dir)
+            print(object_index, pushing_scenario_object_targets[pushing_scenario_index], object_types[object_index])
+            print("single_push_COM_change",single_push_COM_change,"\t\t","sim_angle",sim_angle,"\tgt_angle",gt_angle)
 
         # define new COM for this object
         new_COM = current_object_COM + COM_changes
@@ -306,7 +306,7 @@ def proposed_search_method(pushing_scenarios, pushing_scenario_object_targets, n
 
 def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios, pushing_scenario_object_targets, starting_data, ground_truth_data,
              object_rotation_axes, object_types, current_COMs_list, method_to_use,
-             view_matrix=None, proj_matrix=None):
+             view_matrix=None, proj_matrix=None, shift_plane=(0.,0.,0.), scene_starts=None):
 
     number_of_pushing_scenarios = len(pushing_scenarios)
     number_of_objects = len(starting_data)
@@ -326,7 +326,13 @@ def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios
         this_scene_data = []
         for i,point_pair in enumerate(pushing_scenarios):
             point_1, point_2 = point_pair
-            this_scene_data.append(simulation_and_display.run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix, proj_matrix))
+            if scene_starts is not None:
+                scene_data = p_utils.scene_data_change_COMs(scene_starts[i], current_COMs_list)
+            #for debugging purposes
+            new_test_dir = os.path.join(test_dir,f"push_{i}")
+            if not os.path.isdir(new_test_dir):
+                os.mkdir(new_test_dir)
+            this_scene_data.append(simulation_and_display.run_attempt(scene_data, new_test_dir, iter_num, point_1, point_2, view_matrix, proj_matrix, shift_plane))
         simulated_data_list.append(this_scene_data)
 
 
@@ -345,7 +351,7 @@ def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios
 
 
 def test_COMs(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios, starting_data, ground_truth_data, object_types, all_COMs_list,
-             view_matrix=None, proj_matrix=None):
+             view_matrix=None, proj_matrix=None, scene_starts=None):
 
     number_of_pushing_scenarios = len(pushing_scenarios)
     number_of_objects = len(starting_data)
@@ -364,6 +370,8 @@ def test_COMs(number_of_iterations, test_dir, basic_scene_data, pushing_scenario
         this_scene_data = []
         for i,point_pair in enumerate(pushing_scenarios):
             point_1, point_2 = point_pair
+            if scene_starts is not None:
+                scene_data = p_utils.scene_data_change_COMs(scene_starts[i], all_COMs_list[iter_num])
             this_scene_data.append(simulation_and_display.run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix, proj_matrix))
         simulated_data_list.append(this_scene_data)
 
