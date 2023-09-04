@@ -64,7 +64,7 @@ def update_COM_errors(COM_errors, iter_num, number_of_objects, object_rotation_a
 
 
 def random_sampling(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
-                     starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses):
+                     starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses, scene_starts=None):
     updated_COMs = []
     for object_index in np.arange(number_of_objects):
         com_x_range, com_y_range, com_z_range = simulation_and_display.object_type_com_bounds_and_test_points[object_types[object_index]]["com_bounds"]
@@ -81,12 +81,12 @@ def random_sampling(pushing_scenarios, pushing_scenario_object_targets, number_o
 
 
 def Gaussian_Process_sampling(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
-                    starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses):
+                    starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses, scene_starts=None):
 
     #take 3 random samples first.
     if len(accumulated_COMs_list) < 3:
         return random_sampling(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
-                               starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses)
+                               starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses, scene_starts)
 
     updated_COMs = []
     for object_index in np.arange(number_of_objects):
@@ -127,12 +127,12 @@ def Gaussian_Process_sampling(pushing_scenarios, pushing_scenario_object_targets
 
 
 def simplified_cross_entropy_method_sampling(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
-                     starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses):
+                     starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses, scene_starts=None):
 
     #take 5 random samples first.
     if len(accumulated_COMs_list) < 5:
         return random_sampling(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
-                               starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses)
+                               starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses, scene_starts)
 
     number_best_to_sample = min(10, int(0.5*len(accumulated_COMs_list)))
 
@@ -182,12 +182,14 @@ def simplified_cross_entropy_method_sampling(pushing_scenarios, pushing_scenario
 
 
 def proposed_search_method(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
-                     starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses):
+                     starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses, scene_starts=None):
     current_COMs_list = accumulated_COMs_list[-1]
     # find angles of the objects
     sim_angles = []
     gt_angles = []
     for pushing_scenario_index in np.arange(len(pushing_scenarios)):
+        if scene_starts is not None:
+            starting_data = simulation_and_display.get_starting_data(scene_starts[pushing_scenario_index]) #for lab data
         sim_angles.append([])
         gt_angles.append([])
         for object_index in np.arange(number_of_objects):
@@ -199,7 +201,7 @@ def proposed_search_method(pushing_scenarios, pushing_scenario_object_targets, n
             # get axis in object coords around which object rotates
             rotation_axis_index, rotation_axis_sign = object_rotation_axes[object_index]
 
-            # get angles
+            # get angles around object rotation axis, in object coords
             sim_minus_start = p_utils.quaternion_difference(orientation, start_orientation)
             gt_minus_start = p_utils.quaternion_difference(orientation_gt, start_orientation)
             sim_axis, sim_angle = p_utils.quaternion_to_axis_angle(sim_minus_start)
@@ -224,6 +226,9 @@ def proposed_search_method(pushing_scenarios, pushing_scenario_object_targets, n
             simulation_and_display.object_type_com_bounds_and_test_points[object_types[object_index]]["com_bounds"]
 
         for pushing_scenario_index, point_pair in enumerate(pushing_scenarios):
+            if scene_starts is not None:
+                starting_data = simulation_and_display.get_starting_data(scene_starts[pushing_scenario_index]) #for lab data
+
             #only update object that the push targets
             if not (object_index == pushing_scenario_object_targets[pushing_scenario_index]):
                 continue
@@ -274,10 +279,12 @@ def proposed_search_method(pushing_scenarios, pushing_scenario_object_targets, n
             learning_rate = base_learning_rate * (0.95**(float(len(accumulated_COMs_list))))
             single_push_COM_change = learning_rate * basic_change_to_com
             COM_changes += single_push_COM_change
-            #print("sim_angle,gt_angle",sim_angle,gt_angle)
+            print("push number in list",pushing_scenario_index)
+            print("push_dir",push_dir)
             print("u used",u_perpendicular_to_push_dir)
             print(object_index, pushing_scenario_object_targets[pushing_scenario_index], object_types[object_index])
             print("single_push_COM_change",single_push_COM_change,"\t\t","sim_angle",sim_angle,"\tgt_angle",gt_angle)
+            print()
 
         # define new COM for this object
         new_COM = current_object_COM + COM_changes
@@ -328,8 +335,8 @@ def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios
             point_1, point_2 = point_pair
             if scene_starts is not None:
                 scene_data = p_utils.scene_data_change_COMs(scene_starts[i], current_COMs_list)
-            #for debugging purposes
-            new_test_dir = os.path.join(test_dir,f"push_{i}")
+            #TODO delete new_test_dir code,restore test_dir as variable for run_attempt
+            new_test_dir = os.path.join(test_dir, f"push_{i}_in_list")
             if not os.path.isdir(new_test_dir):
                 os.mkdir(new_test_dir)
             this_scene_data.append(simulation_and_display.run_attempt(scene_data, new_test_dir, iter_num, point_1, point_2, view_matrix, proj_matrix, shift_plane))
@@ -344,7 +351,7 @@ def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios
 
         #update the COMs
         current_COMs_list = method_to_use(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
-                                          starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses)
+                                          starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses, scene_starts=scene_starts)
 
     return losses, accumulated_COMs_list, simulated_data_list
 

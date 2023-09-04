@@ -17,7 +17,7 @@ available_methods = {"proposed_method": COM_search_methods.proposed_search_metho
                      "random_sampling": COM_search_methods.random_sampling,
                      "Gaussian_process": COM_search_methods.Gaussian_Process_sampling,
                      "simplified_CEM": COM_search_methods.simplified_cross_entropy_method_sampling}
-number_of_iterations = 4#25#50      #TODO restore to 25
+number_of_iterations = 25#50
 
 
 def scene_ground_truth_run(ground_truth_folder, scene_data, gt_coms, number_of_objects, pushing_scenario, object_rotation_axes):
@@ -64,6 +64,7 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
             orn = ground_truth_data_raw[object_index][3:7]
             ground_truth_data_this_push.append((pos, orn))
         ground_truth_data.append(ground_truth_data_this_push)
+        print("push used:",i)
 
 
     object_types = []
@@ -105,8 +106,27 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
                                             starting_data, ground_truth_data,
                                             object_rotation_axes, object_types,
                                             current_COMs_list, available_methods[method_name],
-                                            view_matrix=view_matrix, proj_matrix=proj_matrix, #TODO close these
+                                            # view_matrix=view_matrix, proj_matrix=proj_matrix,
                                             shift_plane=shift_plane, scene_starts=scene_starts)
+            '''if method_name=="proposed_method":
+                losses, accumulated_COMs_list, simulated_data_list = \
+                    COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
+                                                pushing_scenarios, pushing_scenario_object_targets,
+                                                starting_data, ground_truth_data,
+                                                object_rotation_axes, object_types,
+                                                current_COMs_list, available_methods[method_name],
+                                                view_matrix=view_matrix, proj_matrix=proj_matrix,       #TODO restore previous version without this
+                                                shift_plane=shift_plane, scene_starts=scene_starts)
+            else:
+                losses, accumulated_COMs_list, simulated_data_list = \
+                    COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
+                                                pushing_scenarios, pushing_scenario_object_targets,
+                                                starting_data, ground_truth_data,
+                                                object_rotation_axes, object_types,
+                                                current_COMs_list, available_methods[method_name],
+                                                # view_matrix=view_matrix, proj_matrix=proj_matrix,
+                                                shift_plane=shift_plane, scene_starts=scene_starts)'''
+
 
             losses_across_methods.append(losses)
             simulated_data_across_methods.append(simulated_data_list)
@@ -365,12 +385,7 @@ def untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shif
         for i in np.arange(4):
             scene_data[object_index][7 + i] = new_orn[i]
 
-    #TODO rotate pushes so that they remain perpendicular to objects
-    #   to do this, we will need to define a vector from the object center to the old pushing point.
-    #   then, we will need to rotate that vector using the quaternion
-    #   finally, we add the object center to the rotated vector to get the new pushing point.
-
-    #untilt pushing scenario
+    #untilt pushing scenario, rotate pushes so that they remain perpendicular to objects
     if pushing_scenario is not None:
         start, end = pushing_scenario
         pos, orn = p.getBasePositionAndOrientation(mobile_object_IDs[push_object_target])
@@ -384,7 +399,7 @@ def untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shif
         new_end_vector = p_utils.rotate_vector(end_vector, rotations_to_planar[push_object_target])
         new_end = new_end_vector + object_center_wc
 
-        new_pushing_scenario = [start, end] #[new_start, new_end]           TODO: see why the new versions do not work.
+        new_pushing_scenario = [new_start, new_end]
 
     # if the lab scene is post-push, print the ground truth data to a csv file
     if ground_truth_folder is not None:
@@ -479,14 +494,6 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
         push_index = push_indices[push_number]
         pos_start = pushing_scenarios_array[push_index][:3]
         pos_end = pushing_scenarios_array[push_index][3:6]
-        '''x_shift = 0.13
-        y_shift = 0.1
-        pos_start[0] += x_shift
-        pos_end[0] += x_shift
-        pos_start[1] += y_shift
-        pos_end[1] += y_shift'''
-        pos_start[2] = shift_plane[2] + 0.02
-        pos_end[2] = shift_plane[2] + 0.02
         print(pushing_scenarios[push_number])
         pushing_scenarios[push_number] = [pos_start, pos_end]
 
@@ -531,6 +538,27 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
         scene_data = untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shift_plane, ground_truth_folder=ground_truth_folder)
         scene_ends.append(scene_data)
 
+    # TODO here is the thing:
+    #   The end point at the end of the IRL push MUST resemble the end point at tne end of the simulated push.
+    #   This means that the pusher at the second point MUST be roughly where the robot arm was.
+    #   I assumed that the robot arm went where the second point in the pusher scenario told it to go, but maybe that is a bad assumption.
+    #   To alleviate this problem, I can make my own version of push 2.
+    #       Assumption: the robot arm's push went in the same direction as the required push
+    #       Therefore, all I need to do is alter push 2 along the same pushing line as before, until the cylinder just barely contracts the object.
+
+    #adjust pushing scenarios so that the end point of the push aligns with the target object's ground truth location.
+    #This assumes that the push's direction aligns with the robot arm's direction of motion
+    for i in np.arange(len(pushing_scenarios)):
+        start, end = pushing_scenarios[i]
+
+        start[2] = shift_plane[2] + 0.03
+        end[2] = shift_plane[2] + 0.03
+
+        scene_end = scene_ends[i]
+        new_end = simulation_and_display.get_new_cylinder_end_loc_along_line(start, end, scene_end, shift_plane)
+        print("push_dir", (end-start)/np.linalg.norm(end-start), "start", start, "end", end, "new end", new_end)
+        pushing_scenarios[i] = [start, new_end]
+
     #get object rotation axes, they should be consistent across all scenes
     mobile_object_IDs = []
     mobile_object_types = []
@@ -538,14 +566,9 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
     p_utils.open_scene_data(scene_starts[0], mobile_object_IDs, mobile_object_types, held_fixed_list,shift_plane=shift_plane)
     adjusted_scene_data = p_utils.get_objects_positions_and_orientations(mobile_object_IDs)
     object_rotation_axes = p_utils.get_object_rotation_axes(adjusted_scene_data)
+    print(object_rotation_axes)
     p.resetSimulation()
     p.setGravity(0, 0, -9.8)
-
-    #TODO: test pushes and see if they are any good
-    #TODO: uncomment the code below that splits pushes into testing and training sets, and run (and debug) that code.
-    #   will need to call later:
-    #       p_utils.open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane=shift_plane)
-    #       make sure the shift plane value is passed on to run_attempt
 
     # split pushes into training and testing sets. Randomly choose one push from each class to go into the training set. Number of training sets = num_train_test_sessions times.
     pushing_scenario_indices_by_class = []
@@ -559,6 +582,7 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
     for i in np.arange(num_train_test_sessions):
         can_add_training_pushes_set = False
         training_pushes_set = []
+        #add one push of each class to the training set
         while not can_add_training_pushes_set:
             training_pushes_set = []
             for class_id in np.arange(number_of_classes):
@@ -625,9 +649,13 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
     simulation_and_display.make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_iterations,
                                                   available_methods, scene_data, object_rotation_axes, view_matrix, proj_matrix)'''
 
-#full_run_one_scene_lab("cracker_box_real",1)
-full_run_one_scene_lab("bleach_cleanser_real",1)
-#full_run_one_scene_lab("clutter_1_real",1)
+full_run_one_scene_lab("cracker_box_real",2)
+full_run_one_scene_lab("bleach_cleanser_real",2)
+full_run_one_scene_lab("sugar_box_real",2)
+full_run_one_scene_lab("mustard_bottle_real",2)
+
+full_run_one_scene_lab("clutter_1_real",2)
+#full_run_one_scene_lab("clutter_2_real",2)
 
 #full_run_one_scene("cracker_box",5)
 #full_run_one_scene("sugar_box",5)

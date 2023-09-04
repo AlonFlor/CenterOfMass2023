@@ -80,6 +80,35 @@ def run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix=No
     return sim_data
 
 
+def get_new_cylinder_end_loc_along_line(start, end, scene_end, shift_plane):
+    #for lab cases. Move the cylinder's end location to where the robot arm's finger must have left off.
+
+    push_dir = end - start
+    push_dir = push_dir / np.linalg.norm(push_dir)
+    update_rate = 0.001
+
+    mobile_object_IDs = []
+    mobile_object_types = []
+    held_fixed_list = []
+    p_utils.open_scene_data(scene_end, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane)
+
+    #cylinder
+    cylinderID = p_utils.create_cylinder(0.015 / 2, 0.05)
+    new_end = start + np.array([0.,0.,0.])
+    p.resetBasePositionAndOrientation(cylinderID, new_end, (0., 0., 0., 1.))
+    p.performCollisionDetection()
+    contact_results = p.getContactPoints(cylinderID)
+    while len(contact_results) == 0:
+        new_end += update_rate*push_dir
+        p.resetBasePositionAndOrientation(cylinderID, new_end, (0., 0., 0., 1.))
+        p.performCollisionDetection()
+        contact_results = p.getContactPoints(cylinderID)
+    p.resetSimulation()
+    p.setGravity(0, 0, -9.8)
+
+    new_end -= update_rate*push_dir
+    return new_end
+
 
 
 
