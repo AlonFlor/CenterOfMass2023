@@ -17,7 +17,7 @@ available_methods = {"proposed_method": COM_search_methods.proposed_search_metho
                      "random_sampling": COM_search_methods.random_sampling,
                      "Gaussian_process": COM_search_methods.Gaussian_Process_sampling,
                      "simplified_CEM": COM_search_methods.simplified_cross_entropy_method_sampling}
-number_of_iterations = 10#25#50         TODO restore number of iterations to 25
+number_of_iterations = 25#50
 
 
 def scene_ground_truth_run(ground_truth_folder, scene_data, gt_coms, number_of_objects, pushing_scenario, object_rotation_axes):
@@ -66,7 +66,6 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
         ground_truth_data.append(ground_truth_data_this_push)
         print("push used:",i)
 
-
     object_types = []
     for object_data in basic_scene_data:
         object_types.append(object_data[0])
@@ -77,12 +76,47 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
     simulated_data_across_methods = []
     if COMs_list is None:
         #no COM list prodivded, so we are in training
-        #generate random COMs
+        #generate COMs
         current_COMs_list = []
         for i in np.arange(number_of_objects):
-            com_x_range,com_y_range,com_z_range = simulation_and_display.object_type_com_bounds_and_test_points[object_types[i]]["com_bounds"]
-            generated_com = p_utils.generate_point(com_x_range, com_y_range, com_z_range)
             rotation_axis_index, axis_sign = object_rotation_axes[i]
+
+            free_axis_0_index = 0
+            while free_axis_0_index==rotation_axis_index:
+                free_axis_0_index += 1
+            free_axis_1_index = 0
+            while free_axis_1_index==free_axis_0_index or free_axis_1_index==rotation_axis_index:
+                free_axis_1_index += 1
+
+            pushing_scenarios_this_object = []
+            for pushing_scenario_index, object_index in enumerate(pushing_scenario_object_targets):
+                if object_index==i:
+                    pushing_scenarios_this_object.append(pushing_scenario_index)
+            push_start_coords = []
+            axes_order_list = []
+            for pushing_scenario_index in pushing_scenarios_this_object:
+                start,end = pushing_scenarios[pushing_scenario_index]
+
+                if scene_starts is not None:
+                    starting_data = simulation_and_display.get_starting_data(scene_starts[pushing_scenario_index])  # for lab data
+                pos, orn = starting_data[i]
+                start_obj_coords = p_utils.get_object_space_point(start, pos, orn)
+                end_obj_coords = p_utils.get_object_space_point(end, pos, orn)
+                push_start_coords.append(start_obj_coords)
+
+                push_dir = end_obj_coords - start_obj_coords
+                push_dir /= np.linalg.norm(push_dir)
+                if abs(push_dir[free_axis_0_index]) > abs(push_dir[free_axis_1_index]):
+                    axes_order_list.append(free_axis_1_index)   #push in axis 0 direction, so take the axis 0 coordinate
+                else:
+                    axes_order_list.append(free_axis_0_index)   #push in axis 1 direction, so take the axis 1 coordinate
+
+            generated_com = np.array([0.,0.,0.])
+            generated_com[axes_order_list[0]] = push_start_coords[0][axes_order_list[0]]
+            generated_com[axes_order_list[1]] = push_start_coords[1][axes_order_list[1]]
+
+            #com_x_range,com_y_range,com_z_range = simulation_and_display.object_type_com_bounds[object_types[i]]["com_bounds"]
+            #generated_com = p_utils.generate_point(com_x_range, com_y_range, com_z_range)      #random COM
 
             # get the value for the COM along the rotation axis.
             generated_com[rotation_axis_index] = simulation_and_display.get_com_value_along_rotation_axis(object_types[i], rotation_axis_index, axis_sign)
@@ -92,6 +126,10 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
                 current_COMs_list.append(generated_com)
             else:
                 current_COMs_list.append(ground_truth_COMs[i])'''
+
+            #TODO: for lab data, do stronger pushes.
+            # generate pushes from pushing line.
+            #   need pushing line, for push that targets this object
             current_COMs_list.append(generated_com)
         #print("current_COMs_list",current_COMs_list)
 
@@ -100,15 +138,15 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
             #print(method_name, sample_num, "com:", current_COMs_list)
             method_dir = os.path.join(this_dir, method_name)
             os.mkdir(method_dir)
-            '''losses, accumulated_COMs_list, simulated_data_list = \
+            losses, accumulated_COMs_list, simulated_data_list = \
                 COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
                                             pushing_scenarios, pushing_scenario_object_targets,
                                             starting_data, ground_truth_data,
                                             object_rotation_axes, object_types,
                                             current_COMs_list, available_methods[method_name],
                                             # view_matrix=view_matrix, proj_matrix=proj_matrix,
-                                            shift_plane=shift_plane, scene_starts=scene_starts)'''
-            if method_name=="proposed_method":
+                                            shift_plane=shift_plane, scene_starts=scene_starts)
+            '''if method_name=="proposed_method":
                 losses, accumulated_COMs_list, simulated_data_list = \
                     COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
                                                 pushing_scenarios, pushing_scenario_object_targets,
@@ -125,11 +163,7 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
                                                 object_rotation_axes, object_types,
                                                 current_COMs_list, available_methods[method_name],
                                                 # view_matrix=view_matrix, proj_matrix=proj_matrix,
-                                                shift_plane=shift_plane, scene_starts=scene_starts)
-
-            #TODO: for lab data, do stronger pushes.
-            # consider replacing the loss function with one based on angles.
-
+                                                shift_plane=shift_plane, scene_starts=scene_starts)'''
 
             losses_across_methods.append(losses)
             simulated_data_across_methods.append(simulated_data_list)
@@ -161,7 +195,7 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
             os.mkdir(method_dir)
             losses, simulated_data_list = \
                 COM_search_methods.test_COMs(number_of_iterations, method_dir, basic_scene_data, pushing_scenarios, starting_data,
-                                             ground_truth_data, object_types, COMs_list[i],
+                                             ground_truth_data, object_rotation_axes, COMs_list[i],
                                              #,view_matrix=view_matrix, proj_matrix=proj_matrix
                                              shift_plane=shift_plane, scene_starts=scene_starts)
             losses_across_methods.append(losses)
@@ -260,7 +294,7 @@ def full_run_one_scene(scene, num_train_test_sessions):
     #make sure ground truth COMs are in the COM bounds
     for i in np.arange(number_of_objects):
         gt_COM = ground_truth_COMs[i]
-        com_x_range,com_y_range,com_z_range = simulation_and_display.object_type_com_bounds_and_test_points[object_types[i]]["com_bounds"]
+        com_x_range,com_y_range,com_z_range = simulation_and_display.object_type_com_bounds[object_types[i]]["com_bounds"]
         out_of_range = (gt_COM[0] < com_x_range[0]) or (gt_COM[0] > com_x_range[1]) or \
                        (gt_COM[1] < com_y_range[0]) or (gt_COM[1] > com_y_range[1]) or \
                        (gt_COM[2] < com_z_range[0]) or (gt_COM[2] > com_z_range[1])
@@ -363,7 +397,7 @@ def untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shif
     # give objects placeholder COMs at their geometric centers so they can be rotated from tilted to on the horizontal plane
     object_centers = []
     for object_index in np.arange(number_of_objects):
-        object_bounds = simulation_and_display.object_type_com_bounds_and_test_points[object_types[object_index]]["full_bounds"]
+        object_bounds = simulation_and_display.object_type_com_bounds[object_types[object_index]]["full_bounds"]
         object_centers.append(0.5 * (np.array([object_bounds[0][0], object_bounds[1][0], object_bounds[2][0]]) +
                                      np.array([object_bounds[0][1], object_bounds[1][1], object_bounds[2][1]])))
     scene_data = p_utils.scene_data_change_COMs(scene_data, object_centers)
@@ -662,7 +696,7 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
 
 
 #full_run_one_scene_lab("cracker_box_real",2)
-full_run_one_scene_lab("bleach_cleanser_real",2)
+#full_run_one_scene_lab("bleach_cleanser_real",2)
 #full_run_one_scene_lab("sugar_box_real",2)
 #full_run_one_scene_lab("mustard_bottle_real",2)
 

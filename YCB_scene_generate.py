@@ -38,14 +38,14 @@ def create_obj(object_type, com, position, orientation):
 
 #find the acceptable COM bounds
 #com_x_range, com_y_range, com_z_range = p_utils.get_COM_bounds("cracker_box")
-object_type_com_bounds_and_test_points = {}
-object_type_com_bounds_and_test_points["cracker_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("cracker_box", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["master_chef_can"] = p_utils.get_com_bounds_and_test_points_for_object_type("master_chef_can", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["pudding_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("pudding_box", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["sugar_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("sugar_box", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["mustard_bottle"] = p_utils.get_com_bounds_and_test_points_for_object_type("mustard_bottle", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["bleach_cleanser"] = p_utils.get_com_bounds_and_test_points_for_object_type("bleach_cleanser", 0.5, 1.0, 0.7)
-object_type_com_bounds_and_test_points["hammer"] = p_utils.get_com_bounds_and_test_points_for_object_type("hammer", 0.4, 0.9, 0.9)
+object_type_com_bounds = {}
+object_type_com_bounds["cracker_box"] = p_utils.get_com_bounds_for_object_type("cracker_box", 0.7, 0.7, 0.7)
+object_type_com_bounds["master_chef_can"] = p_utils.get_com_bounds_for_object_type("master_chef_can", 0.7, 0.7, 0.7)
+object_type_com_bounds["pudding_box"] = p_utils.get_com_bounds_for_object_type("pudding_box", 0.7, 0.7, 0.7)
+object_type_com_bounds["sugar_box"] = p_utils.get_com_bounds_for_object_type("sugar_box", 0.7, 0.7, 0.7)
+object_type_com_bounds["mustard_bottle"] = p_utils.get_com_bounds_for_object_type("mustard_bottle", 0.7, 0.7, 0.7)
+object_type_com_bounds["bleach_cleanser"] = p_utils.get_com_bounds_for_object_type("bleach_cleanser", 0.5, 1.0, 0.7)
+object_type_com_bounds["hammer"] = p_utils.get_com_bounds_for_object_type("hammer", 0.4, 0.9, 0.9)
 
 
 point_x_range = (-0.1,0.1)
@@ -55,7 +55,7 @@ point_z_range = (0.05,0.06)#(0.2, 0.3)
 
 available_objects = ["cracker_box", "pudding_box", "master_chef_can", "hammer", "mustard_bottle", "sugar_box", "bleach_cleanser"]
 #number_of_each_object = [1, 1, 1, 1, 0, 0, 0]
-number_of_each_object = [0, 1, 1, 1, 0, 0, 0]
+number_of_each_object = [0, 0, 0, 0, 0, 0, 1]
 object_COMs = [(-0.01,-0.01,0.08), (0.0,0.0,0.015), (-0.015,-0.01,0.06),  (-0.03,0.0775169,0.015), (-0.005,-0.027,0.07), (-0.005,-0.03,0.12), (-0.025,0.012,0.1)]
 #generate objects with different COMs
 for i in range(len(available_objects)):
@@ -72,7 +72,7 @@ for i in range(len(available_objects)):
             orientation = p.getQuaternionFromEuler((0.,0.,0.))
         if available_objects[i]=="bleach_cleanser":
             orientation = p.getQuaternionFromEuler((-np.pi / 2,0.,0.))
-        '''com_x_range, com_y_range, com_z_range = object_type_com_bounds_and_test_points[available_objects[i]]["com_bounds"]
+        '''com_x_range, com_y_range, com_z_range = object_type_com_bounds[available_objects[i]]["com_bounds"]
         new_com = p_utils.generate_point(com_x_range, com_y_range, com_z_range)
         print("new com:",new_com)'''
 
@@ -118,7 +118,7 @@ p_utils.print_image(view_matrix, proj_matrix, scene_dir, None, "scene_img")
 
 original_scene_data = file_handling.read_csv_file(scene_path,[str, float, float, float, float, float, float, float, float, float, float, int])
 pushing_scenarios, object_rotation_axes = p_utils.make_pushing_scenarios_and_get_object_rotation_axes(original_scene_data, 3,
-                                                                                                      cylinder_height_offset, push_distance, object_type_com_bounds_and_test_points)
+                                                                                                      cylinder_height_offset, push_distance, object_type_com_bounds)
 #pushing_scenarios = [[[pushing_scenarios[0][0][2]], [pushing_scenarios[0][1][0]]]] #TODO delete this
 #pushing_scenarios = [[[pushing_scenarios[0][1][0]]]] #TODO delete this
 pushing_scenarios_to_print = "start_x,start_y,start_z,end_x,end_y,end_z,object_index,side_index\n"

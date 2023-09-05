@@ -9,20 +9,18 @@ import time
 
 dt = 1./240.
 
-num_test_points_per_object = 125 #want to change this? Adjust the number in the get_com_bounds_and_test_points_for_object_type function in pybullet_utilities.py
-
-object_type_com_bounds_and_test_points = {}
-object_type_com_bounds_and_test_points["cracker_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("cracker_box", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["master_chef_can"] = p_utils.get_com_bounds_and_test_points_for_object_type("master_chef_can", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["pudding_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("pudding_box", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["sugar_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("sugar_box", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["mustard_bottle"] = p_utils.get_com_bounds_and_test_points_for_object_type("mustard_bottle", 0.7, 1.0, 0.6)
-object_type_com_bounds_and_test_points["bleach_cleanser"] = p_utils.get_com_bounds_and_test_points_for_object_type("bleach_cleanser", 0.5, 1.0, 0.7)
-object_type_com_bounds_and_test_points["hammer"] = p_utils.get_com_bounds_and_test_points_for_object_type("hammer", 0.4, 0.9, 0.9)
+object_type_com_bounds = {}
+object_type_com_bounds["cracker_box"] = p_utils.get_com_bounds_for_object_type("cracker_box", 0.7, 0.7, 0.7)
+object_type_com_bounds["master_chef_can"] = p_utils.get_com_bounds_for_object_type("master_chef_can", 0.7, 0.7, 0.7)
+object_type_com_bounds["pudding_box"] = p_utils.get_com_bounds_for_object_type("pudding_box", 0.7, 0.7, 0.7)
+object_type_com_bounds["sugar_box"] = p_utils.get_com_bounds_for_object_type("sugar_box", 0.7, 0.7, 0.7)
+object_type_com_bounds["mustard_bottle"] = p_utils.get_com_bounds_for_object_type("mustard_bottle", 0.7, 1.0, 0.6)
+object_type_com_bounds["bleach_cleanser"] = p_utils.get_com_bounds_for_object_type("bleach_cleanser", 0.5, 1.0, 0.7)
+object_type_com_bounds["hammer"] = p_utils.get_com_bounds_for_object_type("hammer", 0.4, 0.9, 0.9)
 
 
 def get_com_value_along_rotation_axis(object_type, rotation_axis_index, axis_sign):
-    com_x_range, com_y_range, com_z_range = object_type_com_bounds_and_test_points[object_type]["com_bounds"]
+    com_x_range, com_y_range, com_z_range = object_type_com_bounds[object_type]["com_bounds"]
     ranges_list = [com_x_range, com_y_range, com_z_range]
     rotation_axis_val = 1. * ranges_list[rotation_axis_index][0] + 0. * ranges_list[rotation_axis_index][1]
     if axis_sign < 0:
@@ -133,7 +131,7 @@ def draw_graphs(test_dir, test_names, average_errors_list, std_dev_errors_list, 
     max_average_losses = max([max(average_losses) for average_losses in average_losses_list])
     gap = 0.1*(max_average_losses - min_average_losses)
     draw_data.plt.ylim(bottom=0.-gap, top=max_average_losses+gap)
-    draw_data.plot_multiple_variables(range(len(average_losses_list[0])), "Iterations", "Average Loss for target object",
+    draw_data.plot_multiple_variables(range(len(average_losses_list[0])), "Iterations", "Average angle loss for target object",
                                       average_losses_list, std_dev_losses_list, test_names, title_preamble=object_name+"_", out_dir=test_dir, show=False)
 
 
@@ -347,7 +345,8 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
         else:
             draw_graphs(test_dir, test_names, None, None, average_losses, std_dev_losses, object_types[object_index], include_COMs=False)
 
-    if include_COMs:
+    #TODO restore this?
+    '''if include_COMs:
         #make videos of selected samples
         for train_session_dir in scene_train_dirs:
             for i,method_name in enumerate(available_methods.keys()):
@@ -363,7 +362,7 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
                             push_indices=push_indices, number_of_objects=number_of_objects)
 
                 for scene_push_index in push_indices:
-                    make_end_states_videos(scene_push_index, method_dir, test_dir, number_of_iterations)
+                    make_end_states_videos(scene_push_index, method_dir, test_dir, number_of_iterations)'''
 
     graphs_and_video_end = time.perf_counter_ns()
     time_to_make_graphs_and_videos = (graphs_and_video_end - graphs_and_videos_start) / 1e9

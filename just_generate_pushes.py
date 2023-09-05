@@ -7,14 +7,14 @@ import file_handling
 
 
 
-object_type_com_bounds_and_test_points = {}
-object_type_com_bounds_and_test_points["cracker_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("cracker_box", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["master_chef_can"] = p_utils.get_com_bounds_and_test_points_for_object_type("master_chef_can", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["pudding_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("pudding_box", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["sugar_box"] = p_utils.get_com_bounds_and_test_points_for_object_type("sugar_box", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["mustard_bottle"] = p_utils.get_com_bounds_and_test_points_for_object_type("mustard_bottle", 0.7, 0.7, 0.7)
-object_type_com_bounds_and_test_points["bleach_cleanser"] = p_utils.get_com_bounds_and_test_points_for_object_type("bleach_cleanser", 0.5, 1.0, 0.7)
-object_type_com_bounds_and_test_points["hammer"] = p_utils.get_com_bounds_and_test_points_for_object_type("hammer", 0.4, 0.9, 0.9)
+object_type_com_bounds = {}
+object_type_com_bounds["cracker_box"] = p_utils.get_com_bounds_for_object_type("cracker_box", 0.7, 0.7, 0.7)
+object_type_com_bounds["master_chef_can"] = p_utils.get_com_bounds_for_object_type("master_chef_can", 0.7, 0.7, 0.7)
+object_type_com_bounds["pudding_box"] = p_utils.get_com_bounds_for_object_type("pudding_box", 0.7, 0.7, 0.7)
+object_type_com_bounds["sugar_box"] = p_utils.get_com_bounds_for_object_type("sugar_box", 0.7, 0.7, 0.7)
+object_type_com_bounds["mustard_bottle"] = p_utils.get_com_bounds_for_object_type("mustard_bottle", 0.7, 0.7, 0.7)
+object_type_com_bounds["bleach_cleanser"] = p_utils.get_com_bounds_for_object_type("bleach_cleanser", 0.5, 1.0, 0.7)
+object_type_com_bounds["hammer"] = p_utils.get_com_bounds_for_object_type("hammer", 0.4, 0.9, 0.9)
 
 
 push_distance = 0.1
@@ -36,7 +36,7 @@ print(original_scene_data)
 
 
 pushing_scenarios, object_rotation_axes = p_utils.make_pushing_scenarios_and_get_object_rotation_axes(original_scene_data, 3,
-                                                                                                      cylinder_height_offset, push_distance, object_type_com_bounds_and_test_points,
+                                                                                                      cylinder_height_offset, push_distance, object_type_com_bounds,
                                                                                                       shift_plane=(0.,0.,-3.))
 p.disconnect()
 

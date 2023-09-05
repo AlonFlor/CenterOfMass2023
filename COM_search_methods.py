@@ -11,8 +11,8 @@ base_learning_rates["master_chef_can"] = 0.03
 base_learning_rates["pudding_box"] = 0.03
 base_learning_rates["sugar_box"] = 0.1
 base_learning_rates["mustard_bottle"] = 0.15
-base_learning_rates["bleach_cleanser"] = 0.15
-base_learning_rates["hammer"] = 0.1
+base_learning_rates["bleach_cleanser"] = 0.17
+base_learning_rates["hammer"] = 0.17
 
 base_learning_rates_clutter = {}
 base_learning_rates_clutter["cracker_box"] = 1.75*base_learning_rates["cracker_box"]
@@ -24,29 +24,49 @@ base_learning_rates_clutter["bleach_cleanser"] = 1.75*base_learning_rates["bleac
 base_learning_rates_clutter["hammer"] = 1.5*base_learning_rates["hammer"]
 
 
-def get_loss_for_object(data_sim, data_gt, test_points):
-    '''Calculate the planar loss as the sum of distances between simulated and ground truth for test points for the object.'''
-    loss = 0.
-    pos, orn = data_sim
-    pos_gt, orn_gt = data_gt
+def get_sim_and_gt_angles(starting_data, this_scene_data, ground_truth_data, object_rotation_axes, number_of_pushing_scenarios, number_of_objects, scene_starts = None):
+    # find angles of the objects
+    sim_angles = []
+    gt_angles = []
+    for pushing_scenario_index in np.arange(number_of_pushing_scenarios):
+        if scene_starts is not None:
+            starting_data = simulation_and_display.get_starting_data(scene_starts[pushing_scenario_index])  # for lab data
+        sim_angles.append([])
+        gt_angles.append([])
+        for object_index in np.arange(number_of_objects):
+            # get orientation data
+            _, start_orientation = starting_data[object_index]
+            _, orientation = this_scene_data[pushing_scenario_index][object_index]
+            _, orientation_gt = ground_truth_data[pushing_scenario_index][object_index]
 
-    for test_point in test_points:
-        test_point_world_coords = p_utils.get_world_space_point(test_point, pos, orn)
-        test_point_gt_world_coords = p_utils.get_world_space_point(test_point, pos_gt, orn_gt)
-        loss += np.linalg.norm(test_point_world_coords[:2]-test_point_gt_world_coords[:2])
+            # get axis in object coords around which object rotates
+            rotation_axis_index, rotation_axis_sign = object_rotation_axes[object_index]
 
-    loss = loss / simulation_and_display.num_test_points_per_object
+            # get angles around object rotation axis, in object coords
+            sim_minus_start = p_utils.quaternion_difference(orientation, start_orientation)
+            gt_minus_start = p_utils.quaternion_difference(orientation_gt, start_orientation)
+            sim_axis, sim_angle = p_utils.quaternion_to_axis_angle(sim_minus_start)
+            gt_axis, gt_angle = p_utils.quaternion_to_axis_angle(gt_minus_start)
+            sim_angle = rotation_axis_sign * sim_axis[2] * sim_angle
+            gt_angle = rotation_axis_sign * gt_axis[2] * gt_angle
+            sim_angle = p_utils.restricted_angle_range(sim_angle)
+            gt_angle = p_utils.restricted_angle_range(gt_angle)
 
-    return loss
+            sim_angles[-1].append(sim_angle)
+            gt_angles[-1].append(gt_angle)
 
-#for each object, its own losses/COM_errors file. This file's rows are pushing_scenarios, its columns are iters.
+    return sim_angles, gt_angles
 
-def update_losses(losses, iter_num, number_of_objects, number_of_pushing_scenarios, object_types, this_scene_data, ground_truth_data):
-    for object_index in np.arange(number_of_objects):
-        test_points = simulation_and_display.object_type_com_bounds_and_test_points[object_types[object_index]]["test_points"]
-        for pushing_scenario_index in np.arange(number_of_pushing_scenarios):
+def update_losses(losses, iter_num, number_of_objects, number_of_pushing_scenarios, object_rotation_axes, starting_data, this_scene_data, ground_truth_data, scene_starts=None):
+    '''Loss = mangitude of the difference between the sim angle and the gt angle. Each angle is the amount by which the object turns from the starting position
+     sum of distances between simulated and ground truth for test points for the object.'''
+    sim_angles, gt_angles = \
+        get_sim_and_gt_angles(starting_data, this_scene_data, ground_truth_data, object_rotation_axes, number_of_pushing_scenarios, number_of_objects, scene_starts=scene_starts)
+
+    for pushing_scenario_index in np.arange(number_of_pushing_scenarios):
+        for object_index in np.arange(number_of_objects):
             losses[object_index][pushing_scenario_index][iter_num] = \
-                get_loss_for_object(this_scene_data[pushing_scenario_index][object_index], ground_truth_data[pushing_scenario_index][object_index], test_points)
+                180. * abs(sim_angles[pushing_scenario_index][object_index] - gt_angles[pushing_scenario_index][object_index]) / np.pi
 
 
 def update_COM_errors(COM_errors, iter_num, number_of_objects, object_rotation_axes, ground_truth_COMs, current_COMs_list):
@@ -67,7 +87,7 @@ def random_sampling(pushing_scenarios, pushing_scenario_object_targets, number_o
                      starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses, scene_starts=None):
     updated_COMs = []
     for object_index in np.arange(number_of_objects):
-        com_x_range, com_y_range, com_z_range = simulation_and_display.object_type_com_bounds_and_test_points[object_types[object_index]]["com_bounds"]
+        com_x_range, com_y_range, com_z_range = simulation_and_display.object_type_com_bounds[object_types[object_index]]["com_bounds"]
         generated_com = p_utils.generate_point(com_x_range, com_y_range, com_z_range)
         rotation_axis_index, axis_sign = object_rotation_axes[object_index]
 
@@ -100,7 +120,7 @@ def Gaussian_Process_sampling(pushing_scenarios, pushing_scenario_object_targets
         gpr = GaussianProcessRegressor()
         gpr.fit(accumulated_COMs_array_this_object, average_losses_array)
 
-        com_x_range, com_y_range, com_z_range = simulation_and_display.object_type_com_bounds_and_test_points[object_types[object_index]]["com_bounds"]
+        com_x_range, com_y_range, com_z_range = simulation_and_display.object_type_com_bounds[object_types[object_index]]["com_bounds"]
         x_space = np.linspace(com_x_range[0], com_x_range[1], 100)
         y_space = np.linspace(com_y_range[0], com_y_range[1], 100)
         z_space = np.linspace(com_z_range[0], com_z_range[1], 100)
@@ -138,7 +158,7 @@ def simplified_cross_entropy_method_sampling(pushing_scenarios, pushing_scenario
 
     updated_COMs = []
     for object_index in np.arange(number_of_objects):
-        com_x_range, com_y_range, com_z_range = simulation_and_display.object_type_com_bounds_and_test_points[object_types[object_index]]["com_bounds"]
+        com_x_range, com_y_range, com_z_range = simulation_and_display.object_type_com_bounds[object_types[object_index]]["com_bounds"]
         rotation_axis_index, axis_sign = object_rotation_axes[object_index]
 
         accumulated_COMs_list_this_object = []
@@ -184,35 +204,10 @@ def simplified_cross_entropy_method_sampling(pushing_scenarios, pushing_scenario
 def proposed_search_method(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
                      starting_data, this_scene_data, ground_truth_data, accumulated_COMs_list, losses, scene_starts=None):
     current_COMs_list = accumulated_COMs_list[-1]
-    # find angles of the objects
-    sim_angles = []
-    gt_angles = []
-    for pushing_scenario_index in np.arange(len(pushing_scenarios)):
-        if scene_starts is not None:
-            starting_data = simulation_and_display.get_starting_data(scene_starts[pushing_scenario_index]) #for lab data
-        sim_angles.append([])
-        gt_angles.append([])
-        for object_index in np.arange(number_of_objects):
-            # get orientation data
-            _, start_orientation = starting_data[object_index]
-            _, orientation = this_scene_data[pushing_scenario_index][object_index]
-            _, orientation_gt = ground_truth_data[pushing_scenario_index][object_index]
 
-            # get axis in object coords around which object rotates
-            rotation_axis_index, rotation_axis_sign = object_rotation_axes[object_index]
-
-            # get angles around object rotation axis, in object coords
-            sim_minus_start = p_utils.quaternion_difference(orientation, start_orientation)
-            gt_minus_start = p_utils.quaternion_difference(orientation_gt, start_orientation)
-            sim_axis, sim_angle = p_utils.quaternion_to_axis_angle(sim_minus_start)
-            gt_axis, gt_angle = p_utils.quaternion_to_axis_angle(gt_minus_start)
-            sim_angle = rotation_axis_sign * sim_axis[2] * sim_angle
-            gt_angle = rotation_axis_sign * gt_axis[2] * gt_angle
-            sim_angle = p_utils.restricted_angle_range(sim_angle)
-            gt_angle = p_utils.restricted_angle_range(gt_angle)
-
-            sim_angles[-1].append(sim_angle)
-            gt_angles[-1].append(gt_angle)
+    #get the angles of the objects
+    sim_angles, gt_angles = get_sim_and_gt_angles(starting_data, this_scene_data, ground_truth_data, object_rotation_axes,
+                                                  len(pushing_scenarios), number_of_objects, scene_starts)
 
     # find new locations for the object COMs
     updated_COMs = []
@@ -223,7 +218,7 @@ def proposed_search_method(pushing_scenarios, pushing_scenario_object_targets, n
         COM_changes = np.array([0., 0., 0.])
         rotation_axis_index, rotation_axis_sign = object_rotation_axes[object_index]
         com_x_range, com_y_range, com_z_range = \
-            simulation_and_display.object_type_com_bounds_and_test_points[object_types[object_index]]["com_bounds"]
+            simulation_and_display.object_type_com_bounds[object_types[object_index]]["com_bounds"]
 
         for pushing_scenario_index, point_pair in enumerate(pushing_scenarios):
             if scene_starts is not None:
@@ -335,11 +330,7 @@ def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios
             point_1, point_2 = point_pair
             if scene_starts is not None:
                 scene_data = p_utils.scene_data_change_COMs(scene_starts[i], current_COMs_list)
-            #TODO delete new_test_dir code,restore test_dir as variable for run_attempt
-            new_test_dir = os.path.join(test_dir, f"push_{i}_in_list")
-            if not os.path.isdir(new_test_dir):
-                os.mkdir(new_test_dir)
-            this_scene_data.append(simulation_and_display.run_attempt(scene_data, new_test_dir, iter_num, point_1, point_2, view_matrix, proj_matrix, shift_plane))
+            this_scene_data.append(simulation_and_display.run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix, proj_matrix, shift_plane))
         simulated_data_list.append(this_scene_data)
 
 
@@ -347,7 +338,8 @@ def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios
         accumulated_COMs_list.append(current_COMs_list)
 
         #update the losses
-        update_losses(losses, iter_num, number_of_objects, number_of_pushing_scenarios, object_types, this_scene_data, ground_truth_data)
+        update_losses(losses, iter_num, number_of_objects, number_of_pushing_scenarios, object_rotation_axes, starting_data, this_scene_data, ground_truth_data,
+                      scene_starts=scene_starts)
 
         #update the COMs
         current_COMs_list = method_to_use(pushing_scenarios, pushing_scenario_object_targets, number_of_objects, object_rotation_axes, object_types,
@@ -357,7 +349,7 @@ def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios
 
 
 
-def test_COMs(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios, starting_data, ground_truth_data, object_types, all_COMs_list,
+def test_COMs(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios, starting_data, ground_truth_data, object_rotation_axes, all_COMs_list,
              view_matrix=None, proj_matrix=None, shift_plane=(0.,0.,0.), scene_starts=None):
 
     number_of_pushing_scenarios = len(pushing_scenarios)
@@ -383,7 +375,8 @@ def test_COMs(number_of_iterations, test_dir, basic_scene_data, pushing_scenario
         simulated_data_list.append(this_scene_data)
 
         #update the losses
-        update_losses(losses, iter_num, number_of_objects, number_of_pushing_scenarios, object_types, this_scene_data, ground_truth_data)
+        update_losses(losses, iter_num, number_of_objects, number_of_pushing_scenarios, object_rotation_axes, starting_data, this_scene_data, ground_truth_data,
+                      scene_starts=scene_starts)
 
     return losses, simulated_data_list
 
