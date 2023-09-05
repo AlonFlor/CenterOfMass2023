@@ -80,7 +80,7 @@ def run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix=No
     return sim_data
 
 
-def get_new_cylinder_end_loc_along_line(start, end, scene_end, shift_plane):
+def get_new_cylinder_end_loc_along_line(start, end, scene_end, shift_plane, view_matrix, proj_matrix, ground_truth_folder):
     #for lab cases. Move the cylinder's end location to where the robot arm's finger must have left off.
 
     push_dir = end - start
@@ -103,10 +103,13 @@ def get_new_cylinder_end_loc_along_line(start, end, scene_end, shift_plane):
         p.resetBasePositionAndOrientation(cylinderID, new_end, (0., 0., 0., 1.))
         p.performCollisionDetection()
         contact_results = p.getContactPoints(cylinderID)
+
+    p_utils.print_image(view_matrix, proj_matrix, ground_truth_folder, extra_message="new_pusher_loc")
+    p.resetBasePositionAndOrientation(cylinderID, end, (0., 0., 0., 1.))
+    p_utils.print_image(view_matrix, proj_matrix, ground_truth_folder, extra_message="old_pusher_loc")
+
     p.resetSimulation()
     p.setGravity(0, 0, -9.8)
-
-    new_end -= update_rate*push_dir
     return new_end
 
 
@@ -115,14 +118,15 @@ def get_new_cylinder_end_loc_along_line(start, end, scene_end, shift_plane):
 
 
 
-def draw_graphs(test_dir, test_names, average_errors_list, std_dev_errors_list, average_losses_list, std_dev_losses_list, object_name):
+def draw_graphs(test_dir, test_names, average_errors_list, std_dev_errors_list, average_losses_list, std_dev_losses_list, object_name, include_COMs=True):
     draw_data.plt.rcParams['figure.figsize'] = [9, 7.5]
-    min_average_errors = min([min(average_errors) for average_errors in average_errors_list])
-    max_average_errors = max([max(average_errors) for average_errors in average_errors_list])
-    gap = 0.1*(max_average_errors - min_average_errors)
-    draw_data.plt.ylim(bottom=0.-gap, top=max_average_errors+gap)
-    draw_data.plot_multiple_variables(range(len(average_errors_list[0])), "Iterations", "Average COM planar error for target object",
-                                      average_errors_list, std_dev_errors_list, test_names, title_preamble=object_name+"_", out_dir=test_dir, show=False)
+    if include_COMs:
+        min_average_errors = min([min(average_errors) for average_errors in average_errors_list])
+        max_average_errors = max([max(average_errors) for average_errors in average_errors_list])
+        gap = 0.1*(max_average_errors - min_average_errors)
+        draw_data.plt.ylim(bottom=0.-gap, top=max_average_errors+gap)
+        draw_data.plot_multiple_variables(range(len(average_errors_list[0])), "Iterations", "Average COM planar error for target object",
+                                          average_errors_list, std_dev_errors_list, test_names, title_preamble=object_name+"_", out_dir=test_dir, show=False)
 
     draw_data.plt.ylim(bottom=0.)
     min_average_losses = min([min(average_losses) for average_losses in average_losses_list])
@@ -150,17 +154,6 @@ def display_COMs(mobile_object_IDs, sim_data, ranges_lists, object_rotation_axes
         COM_display_point_wc[2] = rotation_axis_range + 0.01   #move com point up so it can be displayed above its target object
         COM_display_shape = p.createVisualShape(p.GEOM_SPHERE, radius=0.01, rgbaColor=(0.,(0. if is_ground_truth else 1.),(1. if is_ground_truth else 0.),1.))
         p.createMultiBody(baseVisualShapeIndex = COM_display_shape, basePosition=COM_display_point_wc)
-
-
-def make_images_simple(scenario_dir, basic_scene_data, view_matrix, proj_matrix, extra_message="", shift_plane=None):
-    # open the scene
-    mobile_object_IDs = []
-    mobile_object_types = []
-    held_fixed_list = []
-    p_utils.open_scene_data(basic_scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane=shift_plane)
-
-    # print the image
-    p_utils.print_image(view_matrix, proj_matrix, scenario_dir, extra_message=extra_message)
 
 
 def make_images(scenario_dir, basic_scene_data, object_rotation_axes, view_matrix, proj_matrix, number_of_pushing_scenarios,
@@ -237,22 +230,32 @@ def make_end_states_videos(scene_push_index, method_dir, test_dir, num_iteration
 
 
 def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_iterations, available_methods, basic_scene_data, object_rotation_axes,
-                           view_matrix, proj_matrix):
+                           view_matrix, proj_matrix, include_COMs=True):
     graphs_and_videos_start = time.perf_counter_ns()
 
-    #prepare COM_errors and losses lists for graphing
-    COM_errors_list = []
+    #prepare list of data points to keep for graphing
+    iterations_script_list = []
+    for object_index in np.arange(number_of_objects):
+        iterations_script_list_this_object = []
+        for i, method_name in enumerate(available_methods.keys()):
+            iterations_script_list_this_object.append([None]*number_of_iterations)
+        iterations_script_list.append(iterations_script_list_this_object)
+
+    if include_COMs:
+        #prepare COM_errors for graphing
+        COM_errors_list = []
+        for object_index in np.arange(number_of_objects):
+            COM_errors_list_this_object = []
+            for i, method_name in enumerate(available_methods.keys()):
+                COM_errors_list_this_object.append([])
+            COM_errors_list.append(COM_errors_list_this_object)
+
+    #prepare losses lists for graphing
     losses_list = []
     for object_index in np.arange(number_of_objects):
-        COM_errors_list_this_object = []
         losses_list_this_object = []
         for i, method_name in enumerate(available_methods.keys()):
-            COM_errors_list_this_object.append([])
             losses_list_this_object.append([])
-        COM_errors_list_this_object.append([]) #random search
-        losses_list_this_object.append([]) #random search
-
-        COM_errors_list.append(COM_errors_list_this_object)
         losses_list.append(losses_list_this_object)
 
     #gather the directories of all of the scene training sessions
@@ -265,36 +268,35 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
                 scene_train_dirs.append(possible_dir)
 
     #get COM errors from the training sessions
-    random_search_indices_dict = {}
     for train_session_dir in scene_train_dirs:
-        random_search_indices = []
         for object_index in np.arange(number_of_objects):
-            random_search_indices_this_object = []
-            best_randdom_sample_loss = 100.
             for i, method_name in enumerate(available_methods.keys()):
                 method_dir = os.path.join(test_dir, train_session_dir, method_name)
-                COM_errors_file_path = os.path.join(method_dir, f"COM_errors_object_{object_index}.csv")
-                COM_errors = file_handling.read_numerical_csv_file(COM_errors_file_path)
-                COM_errors_list[object_index][i].append(COM_errors)
 
-                #make random search from the best-so-far random sample at each iteration, and build the random search COM errors list
-                if i==1:
-                    losses = file_handling.read_numerical_csv_file(os.path.join(method_dir, f"losses_object_{object_index}.csv"))
-                    COM_errors = file_handling.read_numerical_csv_file(os.path.join(method_dir, f"COM_errors_object_{object_index}.csv")) #separate copy for random search
+                if include_COMs:
+                    COM_errors_file_path = os.path.join(method_dir, f"COM_errors_object_{object_index}.csv")
+                    COM_errors = file_handling.read_numerical_csv_file(COM_errors_file_path)
+
+                #Keeping only the best-so-far at each iteration. Losses determine what counts as best.
+                losses = file_handling.read_numerical_csv_file(os.path.join(method_dir, f"losses_object_{object_index}.csv"))
+                best_loss = np.mean(losses[:,0])
+                iterations_to_keep = []
+                for iteration_index in np.arange(number_of_iterations):
+                    loss = np.mean(losses[:,iteration_index])
+                    if loss <= best_loss:
+                        iterations_to_keep.append(iteration_index)
+                        best_loss = loss
+                    else:
+                        iterations_to_keep.append(iterations_to_keep[-1])
+                    iterations_script_list[object_index][i][iteration_index] = iterations_to_keep[iteration_index]
+
+                if include_COMs:
                     for iteration_index in np.arange(number_of_iterations):
-                        loss = np.mean(losses[:,iteration_index])
-                        if loss < best_randdom_sample_loss:
-                            random_search_indices_this_object.append(iteration_index)
-                            best_randdom_sample_loss = loss
-                        else:
-                            random_search_indices_this_object.append(random_search_indices_this_object[iteration_index-1])
-                        COM_errors[iteration_index] = COM_errors[random_search_indices_this_object[iteration_index]]
-                    COM_errors_list[object_index][-1].append(COM_errors)
+                        COM_errors[iteration_index] = COM_errors[iterations_to_keep[iteration_index]]
 
-            random_search_indices.append(random_search_indices_this_object)
-        random_search_indices_dict[train_session_dir.split("_training")[0]]=random_search_indices
+                    COM_errors_list[object_index][i].append(COM_errors)
 
-    #gather the directories of all of the scene testing sessions
+    # gather the directories of all of the scene testing sessions
     dirs = os.listdir(test_dir)
     scene_test_dirs = []
     for possible_dir in dirs:
@@ -305,65 +307,66 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
 
     # get losses from the test sessions
     for test_session_dir in scene_test_dirs:
-        random_search_indices = random_search_indices_dict[test_session_dir.split("_testing")[0]]
         for object_index in np.arange(number_of_objects):
-            for i,method_name in enumerate(available_methods.keys()):
+            for i, method_name in enumerate(available_methods.keys()):
                 method_dir = os.path.join(test_dir, test_session_dir, method_name)
 
                 losses = file_handling.read_numerical_csv_file(os.path.join(method_dir, f"losses_object_{object_index}.csv"))
                 for push_scenario_row_index in np.arange(losses.shape[0]):
+                    for iteration_index in np.arange(number_of_iterations):
+                        losses[push_scenario_row_index][iteration_index] = losses[push_scenario_row_index][iterations_script_list[object_index][i][iteration_index]]
                     losses_list[object_index][i].append(losses[push_scenario_row_index])
-
-                #build the random search losses list
-                if i==1:
-                    losses = file_handling.read_numerical_csv_file(os.path.join(method_dir, f"losses_object_{object_index}.csv")) #separate copy for random search
-                    for push_scenario_row_index in np.arange(losses.shape[0]):
-                        for iteration_index in np.arange(number_of_iterations):
-                            losses[push_scenario_row_index][iteration_index] = losses[push_scenario_row_index][random_search_indices[object_index][iteration_index]]
-                        losses_list[object_index][-1].append(losses[push_scenario_row_index])
 
     #prepare the data for graphing and graph the data
     for object_index in np.arange(number_of_objects):
-        COM_errors_list_array = np.array(COM_errors_list[object_index])
+        if include_COMs:
+            COM_errors_list_array = np.array(COM_errors_list[object_index])
         losses_list_array = np.array(losses_list[object_index])
 
-        print("COM_errors_list_array.shape",COM_errors_list_array.shape)
+        if include_COMs:
+            print("COM_errors_list_array.shape",COM_errors_list_array.shape)
         print("losses_list_array.shape",losses_list_array.shape)
 
         #get average scores from the samples
-        average_COM_errors = np.mean(COM_errors_list_array, axis=1)
-        std_dev_COM_errors = np.std(COM_errors_list_array, axis=1)
+        if include_COMs:
+            average_COM_errors = np.mean(COM_errors_list_array, axis=1)
+            std_dev_COM_errors = np.std(COM_errors_list_array, axis=1)
         average_losses = np.mean(losses_list_array, axis=1)
         std_dev_losses = np.std(losses_list_array, axis=1)
 
         test_names = []
         for i,method_name in enumerate(available_methods.keys()):
-            test_names.append(method_name)
-        #extra for random search
-        test_names.append("random_search")
+            if method_name=="random_sampling":
+                test_names.append("random_search")
+            else:
+                test_names.append(method_name)
 
         # make graphs with average for each type of optimization, and where x-axis is iteration number.
-        draw_graphs(test_dir, test_names, average_COM_errors, std_dev_COM_errors, average_losses, std_dev_losses, object_types[object_index])
+        if include_COMs:
+            draw_graphs(test_dir, test_names, average_COM_errors, std_dev_COM_errors, average_losses, std_dev_losses, object_types[object_index])
+        else:
+            draw_graphs(test_dir, test_names, None, None, average_losses, std_dev_losses, object_types[object_index], include_COMs=False)
 
-    #make videos of selected samples
-    for train_session_dir in scene_train_dirs:
+    if include_COMs:
+        #make videos of selected samples
+        for train_session_dir in scene_train_dirs:
+            for i,method_name in enumerate(available_methods.keys()):
+                if i>0:
+                    #only making videos for my method
+                    break
+                push_indices_path = os.path.join(test_dir, train_session_dir, "pushing_scenario_indices.csv")
+                push_indices = file_handling.read_numerical_csv_file(push_indices_path, num_type=int)
+                push_indices = push_indices.reshape((push_indices.shape[0],))
 
-        for i,method_name in enumerate(available_methods.keys()):
-            if i>0:
-                #only making videos for my method
-                break
-            push_indices_path = os.path.join(test_dir, train_session_dir, "pushing_scenario_indices.csv")
-            push_indices = file_handling.read_numerical_csv_file(push_indices_path, num_type=int)
-            push_indices = push_indices.reshape((push_indices.shape[0],))
+                method_dir = os.path.join(test_dir, train_session_dir, method_name)
+                make_images(method_dir,basic_scene_data, object_rotation_axes, view_matrix, proj_matrix, len(push_indices), number_of_iterations,
+                            push_indices=push_indices, number_of_objects=number_of_objects)
 
-            method_dir = os.path.join(test_dir, train_session_dir, method_name)
-            make_images(method_dir,basic_scene_data, object_rotation_axes, view_matrix, proj_matrix, len(push_indices), number_of_iterations,
-                        push_indices=push_indices, number_of_objects=number_of_objects)
-
-            for scene_push_index in push_indices:
-                make_end_states_videos(scene_push_index, method_dir, test_dir, number_of_iterations)
-
+                for scene_push_index in push_indices:
+                    make_end_states_videos(scene_push_index, method_dir, test_dir, number_of_iterations)
 
     graphs_and_video_end = time.perf_counter_ns()
     time_to_make_graphs_and_videos = (graphs_and_video_end - graphs_and_videos_start) / 1e9
     print('Time to make graphs and videos:', time_to_make_graphs_and_videos, 's\t\t', time_to_make_graphs_and_videos/3600., 'h\n\n')
+
+

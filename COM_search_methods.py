@@ -358,7 +358,7 @@ def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios
 
 
 def test_COMs(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios, starting_data, ground_truth_data, object_types, all_COMs_list,
-             view_matrix=None, proj_matrix=None, scene_starts=None):
+             view_matrix=None, proj_matrix=None, shift_plane=(0.,0.,0.), scene_starts=None):
 
     number_of_pushing_scenarios = len(pushing_scenarios)
     number_of_objects = len(starting_data)
@@ -379,7 +379,7 @@ def test_COMs(number_of_iterations, test_dir, basic_scene_data, pushing_scenario
             point_1, point_2 = point_pair
             if scene_starts is not None:
                 scene_data = p_utils.scene_data_change_COMs(scene_starts[i], all_COMs_list[iter_num])
-            this_scene_data.append(simulation_and_display.run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix, proj_matrix))
+            this_scene_data.append(simulation_and_display.run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix, proj_matrix, shift_plane))
         simulated_data_list.append(this_scene_data)
 
         #update the losses

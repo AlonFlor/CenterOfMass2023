@@ -17,7 +17,7 @@ available_methods = {"proposed_method": COM_search_methods.proposed_search_metho
                      "random_sampling": COM_search_methods.random_sampling,
                      "Gaussian_process": COM_search_methods.Gaussian_Process_sampling,
                      "simplified_CEM": COM_search_methods.simplified_cross_entropy_method_sampling}
-number_of_iterations = 25#50
+number_of_iterations = 10#25#50         TODO restore number of iterations to 25
 
 
 def scene_ground_truth_run(ground_truth_folder, scene_data, gt_coms, number_of_objects, pushing_scenario, object_rotation_axes):
@@ -100,15 +100,15 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
             #print(method_name, sample_num, "com:", current_COMs_list)
             method_dir = os.path.join(this_dir, method_name)
             os.mkdir(method_dir)
-            losses, accumulated_COMs_list, simulated_data_list = \
+            '''losses, accumulated_COMs_list, simulated_data_list = \
                 COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
                                             pushing_scenarios, pushing_scenario_object_targets,
                                             starting_data, ground_truth_data,
                                             object_rotation_axes, object_types,
                                             current_COMs_list, available_methods[method_name],
                                             # view_matrix=view_matrix, proj_matrix=proj_matrix,
-                                            shift_plane=shift_plane, scene_starts=scene_starts)
-            '''if method_name=="proposed_method":
+                                            shift_plane=shift_plane, scene_starts=scene_starts)'''
+            if method_name=="proposed_method":
                 losses, accumulated_COMs_list, simulated_data_list = \
                     COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
                                                 pushing_scenarios, pushing_scenario_object_targets,
@@ -125,7 +125,10 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
                                                 object_rotation_axes, object_types,
                                                 current_COMs_list, available_methods[method_name],
                                                 # view_matrix=view_matrix, proj_matrix=proj_matrix,
-                                                shift_plane=shift_plane, scene_starts=scene_starts)'''
+                                                shift_plane=shift_plane, scene_starts=scene_starts)
+
+            #TODO: for lab data, do stronger pushes.
+            # consider replacing the loss function with one based on angles.
 
 
             losses_across_methods.append(losses)
@@ -160,7 +163,7 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
                 COM_search_methods.test_COMs(number_of_iterations, method_dir, basic_scene_data, pushing_scenarios, starting_data,
                                              ground_truth_data, object_types, COMs_list[i],
                                              #,view_matrix=view_matrix, proj_matrix=proj_matrix
-                                             scene_starts=scene_starts)
+                                             shift_plane=shift_plane, scene_starts=scene_starts)
             losses_across_methods.append(losses)
             simulated_data_across_methods.append(simulated_data_list)
 
@@ -211,6 +214,7 @@ def full_run_one_scene(scene, num_train_test_sessions):
     object_types = []
     for object_data in scene_data:
         object_types.append(object_data[0])
+    number_of_objects = len(object_types)
 
     #get the pushing scenarios for the scene and sort pushing scenarios by class
     pushing_scenarios_array = file_handling.read_numerical_csv_file(os.path.join("scenes", scene, "pushing_scenarios.csv"))
@@ -249,7 +253,6 @@ def full_run_one_scene(scene, num_train_test_sessions):
     new_scene_loc = os.path.join(test_dir, "scene.csv")
     p_utils.save_scene_with_shifted_COMs(scene_loc, new_scene_loc, ground_truth_COMs)
     scene_data = file_handling.read_csv_file(new_scene_loc, [str, float, float, float, float, float, float, float, float, float, float, int])
-    number_of_objects = len(scene_data)
 
     file_path = os.path.join(test_dir, "ground_truth_COMs_data.csv")
     file_handling.write_csv_file(file_path, "x,y,z", ground_truth_COMs)
@@ -351,6 +354,9 @@ def full_run_one_scene(scene, num_train_test_sessions):
                                                   scene_data, object_rotation_axes, view_matrix, proj_matrix)
 
 
+
+
+
 def untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shift_plane, ground_truth_folder=None, pushing_scenario=None, push_object_target=None):
     #print lab scene as ground truth for push after
 
@@ -362,12 +368,11 @@ def untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shif
                                      np.array([object_bounds[0][1], object_bounds[1][1], object_bounds[2][1]])))
     scene_data = p_utils.scene_data_change_COMs(scene_data, object_centers)
 
+    # get the rotation axis and angle sign of each object in the scene
     mobile_object_IDs = []
     mobile_object_types = []
     held_fixed_list = []
     p_utils.open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane=shift_plane)
-
-    # get the rotation axis and angle sign of each object in the scene
     adjusted_scene_data = p_utils.get_objects_positions_and_orientations(mobile_object_IDs)
     object_rotation_axes = p_utils.get_object_rotation_axes(adjusted_scene_data)
 
@@ -382,6 +387,7 @@ def untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shif
         rotation_to_planar = p_utils.get_rotation_between_vectors(rotation_axis, rotated_z_vector)
         rotations_to_planar.append(rotation_to_planar)
         new_orn = p_utils.quaternion_multiplication(orn, rotation_to_planar)
+        p.resetBasePositionAndOrientation(mobile_object_IDs[object_index], pos, new_orn)
         for i in np.arange(4):
             scene_data[object_index][7 + i] = new_orn[i]
 
@@ -413,7 +419,7 @@ def untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shif
         file_path = os.path.join(ground_truth_folder, f"push_data.csv")
         file_handling.write_csv_file(file_path, "x,y,z,orn_x,orn_y,orn_z,orn_w", gt_data_array)
 
-        simulation_and_display.make_images_simple(ground_truth_folder, scene_data, view_matrix, proj_matrix, extra_message="image", shift_plane=shift_plane)  # make images
+        p_utils.print_image(view_matrix, proj_matrix, ground_truth_folder, extra_message="image") #make image
 
     p.resetSimulation()
     p.setGravity(0, 0, -9.8)
@@ -538,14 +544,6 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
         scene_data = untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shift_plane, ground_truth_folder=ground_truth_folder)
         scene_ends.append(scene_data)
 
-    # TODO here is the thing:
-    #   The end point at the end of the IRL push MUST resemble the end point at tne end of the simulated push.
-    #   This means that the pusher at the second point MUST be roughly where the robot arm was.
-    #   I assumed that the robot arm went where the second point in the pusher scenario told it to go, but maybe that is a bad assumption.
-    #   To alleviate this problem, I can make my own version of push 2.
-    #       Assumption: the robot arm's push went in the same direction as the required push
-    #       Therefore, all I need to do is alter push 2 along the same pushing line as before, until the cylinder just barely contracts the object.
-
     #adjust pushing scenarios so that the end point of the push aligns with the target object's ground truth location.
     #This assumes that the push's direction aligns with the robot arm's direction of motion
     for i in np.arange(len(pushing_scenarios)):
@@ -555,7 +553,8 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
         end[2] = shift_plane[2] + 0.03
 
         scene_end = scene_ends[i]
-        new_end = simulation_and_display.get_new_cylinder_end_loc_along_line(start, end, scene_end, shift_plane)
+        new_end = simulation_and_display.get_new_cylinder_end_loc_along_line(start, end, scene_end, shift_plane,
+                                                                             view_matrix, proj_matrix, os.path.join(test_dir, f"ground_truth_push_{i}"))
         print("push_dir", (end-start)/np.linalg.norm(end-start), "start", start, "end", end, "new end", new_end)
         pushing_scenarios[i] = [start, new_end]
 
@@ -644,18 +643,9 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
                                  pushing_scenario_testing_object_targets,
                                  testing_pushes_set, object_rotation_axes, COMs_list=COMs_list, shift_plane=shift_plane, scene_starts=testing_scene_starts)
 
-    #TODO uncomment code
-    '''#make graphs and videos
+    #make graphs and videos
     simulation_and_display.make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_iterations,
-                                                  available_methods, scene_data, object_rotation_axes, view_matrix, proj_matrix)'''
-
-full_run_one_scene_lab("cracker_box_real",2)
-full_run_one_scene_lab("bleach_cleanser_real",2)
-full_run_one_scene_lab("sugar_box_real",2)
-full_run_one_scene_lab("mustard_bottle_real",2)
-
-full_run_one_scene_lab("clutter_1_real",2)
-#full_run_one_scene_lab("clutter_2_real",2)
+                                                  available_methods, None, object_rotation_axes, view_matrix, proj_matrix, include_COMs=False)
 
 #full_run_one_scene("cracker_box",5)
 #full_run_one_scene("sugar_box",5)
@@ -666,23 +656,18 @@ full_run_one_scene_lab("clutter_1_real",2)
 #full_run_one_scene("mustard_bottle",5)
 #full_run_one_scene("bleach_cleanser",5)
 
-
 #full_run_one_scene("clutter_1",5)
 #full_run_one_scene("clutter_2",5)
 #full_run_one_scene("clutter_3",5)
 
-#TODO rerun everything for just the drawings so I can combine them.
-#   Also get rid of random sampling (keep random search)
-#   Apply the same thing I did to random search to all other searches: take the best-so-far for graphing
 
+#full_run_one_scene_lab("cracker_box_real",2)
+full_run_one_scene_lab("bleach_cleanser_real",2)
+#full_run_one_scene_lab("sugar_box_real",2)
+#full_run_one_scene_lab("mustard_bottle_real",2)
 
-#full_run_one_scene(os.path.join("scenes","scene_cracker_boxes_clutter.csv"), 4)
-#full_run_one_scene(os.path.join("scenes","scene_cracker_box.csv"), 1)
-#full_run_one_scene(os.path.join("scenes","scene_mustard_bottle.csv"), 1)
-#full_run_one_scene(os.path.join("scenes","scene_master_chef_can.csv"), 1)
-#full_run_one_scene(os.path.join("scenes","scene_pudding_box.csv"), 1)
-#full_run_one_scene(os.path.join("scenes","scene_sugar_box.csv"), 1)
-#full_run_one_scene(os.path.join("scenes","scene_bleach_cleanser.csv"), 1)
+#full_run_one_scene_lab("clutter_1_real",2)
+#full_run_one_scene_lab("clutter_2_real",2)
 
 
 p.disconnect()
