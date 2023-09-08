@@ -122,9 +122,14 @@ def get_actual_mass_com_cof_and_moment_of_inertia(objectID, num_links, object_sc
 
 
 def create_cylinder(radius, height):
-    cylinder_shapeID = p.createCollisionShape(p.GEOM_CYLINDER, radius=radius, height=height)
+    cylinder_collision_shapeID = p.createCollisionShape(p.GEOM_CYLINDER, radius=radius, height=height)
     cylinder_visual_shapeID = p.createVisualShape(p.GEOM_CYLINDER, radius=radius, length=height)
-    return p.createMultiBody(1., cylinder_shapeID, cylinder_visual_shapeID, (0., 0., 0.5), (0., 0., 0., 1.))
+    return p.createMultiBody(1., cylinder_collision_shapeID, cylinder_visual_shapeID, (0., 0., 0.5), (0., 0., 0., 1.))
+
+def create_box(x_he,y_he,z_he):
+    box_collision_shapeID = p.createCollisionShape(p.GEOM_BOX, halfExtents=(x_he,y_he,z_he))
+    box_visual_shapeID = p.createVisualShape(p.GEOM_BOX, halfExtents=(x_he,y_he,z_he))
+    return p.createMultiBody(1., box_collision_shapeID, box_visual_shapeID, (0., 0., 0.5), (0., 0., 0., 1.))
 
 
 

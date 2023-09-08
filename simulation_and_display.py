@@ -18,6 +18,14 @@ object_type_com_bounds["mustard_bottle"] = p_utils.get_com_bounds_for_object_typ
 object_type_com_bounds["bleach_cleanser"] = p_utils.get_com_bounds_for_object_type("bleach_cleanser", 0.5, 1.0, 0.7)
 object_type_com_bounds["hammer"] = p_utils.get_com_bounds_for_object_type("hammer", 0.4, 0.9, 0.9)
 
+#real life centers of mass of objects, found via human skill. The value 0 is put as a placeholder where there is a rotation axis.
+real_life_coms = {}
+real_life_coms["cracker_box"] = np.array([0.,-0.015,0.11])
+real_life_coms["bleach_cleanser"] = np.array([-0.02,0.,0.11])
+real_life_coms["mustard_bottle"] = np.array([-0.005,0.,0.0975])
+real_life_coms["hammer"] = np.array([-0.03,0.0775169,0.])
+real_life_coms["sugar_box"] = np.array([0.,-0.0175,0.09])
+
 
 def get_com_value_along_rotation_axis(object_type, rotation_axis_index, axis_sign):
     com_x_range, com_y_range, com_z_range = object_type_com_bounds[object_type]["com_bounds"]
@@ -43,7 +51,7 @@ def get_starting_data(scene_data):
 
     return starting_data
 
-def run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix=None, proj_matrix=None, shift_plane=(0.,0.,0.)):
+def run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix=None, proj_matrix=None, shift_plane=(0.,0.,0.), use_box_pusher=False):
     mobile_object_IDs = []
     mobile_object_types = []
     held_fixed_list = []
@@ -53,19 +61,22 @@ def run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix=No
     p_utils.open_scene_data(scene_data, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane)
 
     #push
-    cylinderID = p_utils.create_cylinder(0.015 / 2, 0.05)
-    p.resetBasePositionAndOrientation(cylinderID, point_1, (0., 0., 0., 1.))
+    if use_box_pusher:
+        pusherID = p_utils.create_box(0.0125, 0.0075, 0.025)
+    else:
+        pusherID = p_utils.create_cylinder(0.015 / 2, 0.05)
+    p.resetBasePositionAndOrientation(pusherID, point_1, (0., 0., 0., 1.))
     time_limit = 4.
     if view_matrix is not None:
         #make video
         iter_push_name = f"iteration_{iter_num}"
         push_images_folder = os.path.join(test_dir, iter_push_name+"_images")
         os.mkdir(push_images_folder)
-        p_utils.push(point_2, cylinderID, dt, mobile_object_IDs=mobile_object_IDs, fps=24, view_matrix=view_matrix,proj_matrix=proj_matrix,
+        p_utils.push(point_2, pusherID, dt, mobile_object_IDs=mobile_object_IDs, fps=24, view_matrix=view_matrix,proj_matrix=proj_matrix,
                      imgs_dir = push_images_folder, available_image_num = 0, motion_script = None, time_out=time_limit)
         p_utils.make_video(test_dir, os.path.join(test_dir, iter_push_name+"_images"), "", 8,iter_push_name)
     else:
-        p_utils.push(point_2, cylinderID, dt, time_out=time_limit)
+        p_utils.push(point_2, pusherID, dt, time_out=time_limit)
 
     #get data after push and reset simulation
     sim_data = p_utils.get_objects_positions_and_orientations(mobile_object_IDs)
@@ -78,7 +89,7 @@ def run_attempt(scene_data, test_dir, iter_num, point_1, point_2, view_matrix=No
     return sim_data
 
 
-def get_new_cylinder_end_loc_along_line(start, end, scene_end, shift_plane, view_matrix, proj_matrix, ground_truth_folder):
+def get_new_pusher_end_loc_along_line(start, end, scene_end, shift_plane, view_matrix, proj_matrix, ground_truth_folder):
     #for lab cases. Move the cylinder's end location to where the robot arm's finger must have left off.
 
     push_dir = end - start
@@ -90,20 +101,21 @@ def get_new_cylinder_end_loc_along_line(start, end, scene_end, shift_plane, view
     held_fixed_list = []
     p_utils.open_scene_data(scene_end, mobile_object_IDs, mobile_object_types, held_fixed_list, shift_plane)
 
-    #cylinder
-    cylinderID = p_utils.create_cylinder(0.015 / 2, 0.05)
+    #box
+    #cylinderID = p_utils.create_cylinder(0.015 / 2, 0.05)
+    boxID = p_utils.create_box(0.0125, 0.0075, 0.025)
     new_end = start + np.array([0.,0.,0.])
-    p.resetBasePositionAndOrientation(cylinderID, new_end, (0., 0., 0., 1.))
+    p.resetBasePositionAndOrientation(boxID, new_end, (0., 0., 0., 1.))
     p.performCollisionDetection()
-    contact_results = p.getContactPoints(cylinderID)
+    contact_results = p.getContactPoints(boxID)
     while len(contact_results) == 0:
         new_end += update_rate*push_dir
-        p.resetBasePositionAndOrientation(cylinderID, new_end, (0., 0., 0., 1.))
+        p.resetBasePositionAndOrientation(boxID, new_end, (0., 0., 0., 1.))
         p.performCollisionDetection()
-        contact_results = p.getContactPoints(cylinderID)
+        contact_results = p.getContactPoints(boxID)
 
     p_utils.print_image(view_matrix, proj_matrix, ground_truth_folder, extra_message="new_pusher_loc")
-    p.resetBasePositionAndOrientation(cylinderID, end, (0., 0., 0., 1.))
+    p.resetBasePositionAndOrientation(boxID, end, (0., 0., 0., 1.))
     p_utils.print_image(view_matrix, proj_matrix, ground_truth_folder, extra_message="old_pusher_loc")
 
     p.resetSimulation()
@@ -117,22 +129,24 @@ def get_new_cylinder_end_loc_along_line(start, end, scene_end, shift_plane, view
 
 
 def draw_graphs(test_dir, test_names, average_errors_list, std_dev_errors_list, average_losses_list, std_dev_losses_list, object_name, include_COMs=True):
+    object_name = object_name.replace("_"," ")
+
     draw_data.plt.rcParams['figure.figsize'] = [9, 7.5]
     if include_COMs:
         min_average_errors = min([min(average_errors) for average_errors in average_errors_list])
         max_average_errors = max([max(average_errors) for average_errors in average_errors_list])
         gap = 0.1*(max_average_errors - min_average_errors)
         draw_data.plt.ylim(bottom=0.-gap, top=max_average_errors+gap)
-        draw_data.plot_multiple_variables(range(len(average_errors_list[0])), "Iterations", "Average COM planar error for target object",
-                                          average_errors_list, std_dev_errors_list, test_names, title_preamble=object_name+"_", out_dir=test_dir, show=False)
+        draw_data.plot_multiple_variables(range(len(average_errors_list[0])), "Iterations", "Average COM planar error (m)",
+                                          average_errors_list, std_dev_errors_list, test_names, title_preamble=object_name+" ", out_dir=test_dir, show=False)
 
     draw_data.plt.ylim(bottom=0.)
     min_average_losses = min([min(average_losses) for average_losses in average_losses_list])
     max_average_losses = max([max(average_losses) for average_losses in average_losses_list])
     gap = 0.1*(max_average_losses - min_average_losses)
     draw_data.plt.ylim(bottom=0.-gap, top=max_average_losses+gap)
-    draw_data.plot_multiple_variables(range(len(average_losses_list[0])), "Iterations", "Average angle loss for target object",
-                                      average_losses_list, std_dev_losses_list, test_names, title_preamble=object_name+"_", out_dir=test_dir, show=False)
+    draw_data.plot_multiple_variables(range(len(average_losses_list[0])), "Iterations", "Average angle loss (deg)",
+                                      average_losses_list, std_dev_losses_list, test_names, title_preamble=object_name+" ", out_dir=test_dir, show=False)
 
 
 
@@ -273,7 +287,8 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
 
                 if include_COMs:
                     COM_errors_file_path = os.path.join(method_dir, f"COM_errors_object_{object_index}.csv")
-                    COM_errors = file_handling.read_numerical_csv_file(COM_errors_file_path)
+                    COM_errors = file_handling.read_numerical_csv_file(COM_errors_file_path)[:number_of_iterations]
+
 
                 #Keeping only the best-so-far at each iteration. Losses determine what counts as best.
                 losses = file_handling.read_numerical_csv_file(os.path.join(method_dir, f"losses_object_{object_index}.csv"))
@@ -309,7 +324,7 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
             for i, method_name in enumerate(available_methods.keys()):
                 method_dir = os.path.join(test_dir, test_session_dir, method_name)
 
-                losses = file_handling.read_numerical_csv_file(os.path.join(method_dir, f"losses_object_{object_index}.csv"))
+                losses = file_handling.read_numerical_csv_file(os.path.join(method_dir, f"losses_object_{object_index}.csv"))[:,:number_of_iterations]
                 for push_scenario_row_index in np.arange(losses.shape[0]):
                     for iteration_index in np.arange(number_of_iterations):
                         losses[push_scenario_row_index][iteration_index] = losses[push_scenario_row_index][iterations_script_list[object_index][i][iteration_index]]
@@ -336,6 +351,8 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
         for i,method_name in enumerate(available_methods.keys()):
             if method_name=="random_sampling":
                 test_names.append("random_search")
+            elif method_name=="simplified_CEM":
+                test_names.append("cross_entropy_search")
             else:
                 test_names.append(method_name)
 
@@ -345,7 +362,6 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
         else:
             draw_graphs(test_dir, test_names, None, None, average_losses, std_dev_losses, object_types[object_index], include_COMs=False)
 
-    #TODO restore this?
     '''if include_COMs:
         #make videos of selected samples
         for train_session_dir in scene_train_dirs:
