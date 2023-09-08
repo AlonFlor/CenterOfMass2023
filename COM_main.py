@@ -76,172 +76,185 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
 
     losses_across_methods = []
     simulated_data_across_methods = []
-    if COMs_list is None:
-        #no COM list prodivded, so we are in training
+    for object_index_outer_loop in np.arange(number_of_objects):
+        pushing_scenario_indices_this_object = []
+        for pushing_scenario_index, object_index in enumerate(pushing_scenario_object_targets):
+            if object_index == object_index_outer_loop:
+                pushing_scenario_indices_this_object.append(pushing_scenario_index)
+        pushing_scenarios_this_object = []
+        ground_truth_data_this_object = []
+        pushing_scenario_object_targets_this_object = []    #redundant, I know, but I don't care anymore
+        for pushing_scenario_index in pushing_scenario_indices_this_object:
+            pushing_scenarios_this_object.append(pushing_scenarios[pushing_scenario_index])
+            ground_truth_data_this_object.append(ground_truth_data[pushing_scenario_index])
+            pushing_scenario_object_targets_this_object.append(pushing_scenario_object_targets[pushing_scenario_index])
+        scene_starts_this_object = None
+        if scene_starts is not None:
+            scene_starts_this_object = []
+            for pushing_scenario_index in pushing_scenario_indices_this_object:
+                scene_starts_this_object.append(scene_starts[pushing_scenario_index])
 
-        #generate COMs to be the intersection of the two pushing lines formed by the two pushes.
-        current_COMs_list = []
-        for i in np.arange(number_of_objects):
-            rotation_axis_index, axis_sign = object_rotation_axes[i]
+        if COMs_list is None:
+            #no COM list prodivded, so we are in training
 
-            free_axis_0_index = 0
-            while free_axis_0_index==rotation_axis_index:
-                free_axis_0_index += 1
-            free_axis_1_index = 0
-            while free_axis_1_index==free_axis_0_index or free_axis_1_index==rotation_axis_index:
-                free_axis_1_index += 1
+            #generate an initial COM to be used by all methods
+            current_COMs_list = []
+            for i in np.arange(number_of_objects):
+                rotation_axis_index, axis_sign = object_rotation_axes[i]
 
-            pushing_scenarios_this_object = []
-            for pushing_scenario_index, object_index in enumerate(pushing_scenario_object_targets):
-                if object_index==i:
-                    pushing_scenarios_this_object.append(pushing_scenario_index)
-            push_start_coords = []
-            axes_order_list = []
-            for pushing_scenario_index in pushing_scenarios_this_object:
-                start,end = pushing_scenarios[pushing_scenario_index]
+                # for the target object generate COMs to be the intersection of the two pushing lines formed by the two pushes.
+                if i==object_index_outer_loop:
+                    free_axis_0_index = 0
+                    while free_axis_0_index==rotation_axis_index:
+                        free_axis_0_index += 1
+                    free_axis_1_index = 0
+                    while free_axis_1_index==free_axis_0_index or free_axis_1_index==rotation_axis_index:
+                        free_axis_1_index += 1
 
-                if scene_starts is not None:
-                    starting_data = simulation_and_display.get_starting_data(scene_starts[pushing_scenario_index])  # for lab data
-                pos, orn = starting_data[i]
-                start_obj_coords = p_utils.get_object_space_point(start, pos, orn)
-                end_obj_coords = p_utils.get_object_space_point(end, pos, orn)
-                push_start_coords.append(start_obj_coords)
+                    push_start_coords = []
+                    axes_order_list = []
+                    for pushing_scenario_index in pushing_scenario_indices_this_object:
+                        start,end = pushing_scenarios[pushing_scenario_index]
 
-                push_dir = end_obj_coords - start_obj_coords
-                push_dir /= np.linalg.norm(push_dir)
-                if abs(push_dir[free_axis_0_index]) > abs(push_dir[free_axis_1_index]):
-                    axes_order_list.append(free_axis_1_index)   #push in axis 0 direction, so take the axis 0 coordinate
+                        if scene_starts is not None:
+                            starting_data = simulation_and_display.get_starting_data(scene_starts[pushing_scenario_index])  # for lab data
+                        pos, orn = starting_data[i]
+                        start_obj_coords = p_utils.get_object_space_point(start, pos, orn)
+                        end_obj_coords = p_utils.get_object_space_point(end, pos, orn)
+                        push_start_coords.append(start_obj_coords)
+
+                        push_dir = end_obj_coords - start_obj_coords
+                        push_dir /= np.linalg.norm(push_dir)
+                        if abs(push_dir[free_axis_0_index]) > abs(push_dir[free_axis_1_index]):
+                            axes_order_list.append(free_axis_1_index)   #push in axis 0 direction, so take the axis 0 coordinate
+                        else:
+                            axes_order_list.append(free_axis_0_index)   #push in axis 1 direction, so take the axis 1 coordinate
+
+                    generated_com = np.array([0.,0.,0.])
+                    generated_com[axes_order_list[0]] = push_start_coords[0][axes_order_list[0]]
+                    generated_com[axes_order_list[1]] = push_start_coords[1][axes_order_list[1]]
+
+                    #if the object is the real life hammer, initialize the COM to be in the geometric center
+                    if object_types[i]=="hammer" and scene_starts is not None:
+                        com_x_range,com_y_range,com_z_range = simulation_and_display.object_type_com_bounds[object_types[i]]["com_bounds"]
+                        generated_com = 0.5*(np.array([com_x_range[0],com_y_range[0],com_z_range[0]]) + np.array([com_x_range[1],com_y_range[1],com_z_range[1]]))
+
+                    #generated_com = p_utils.generate_point(com_x_range, com_y_range, com_z_range)      #random COM
                 else:
-                    axes_order_list.append(free_axis_0_index)   #push in axis 1 direction, so take the axis 1 coordinate
+                    # all non-target objects have the correct COM
+                    generated_com = ground_truth_COMs[i]
 
-            generated_com = np.array([0.,0.,0.])
-            generated_com[axes_order_list[0]] = push_start_coords[0][axes_order_list[0]]
-            generated_com[axes_order_list[1]] = push_start_coords[1][axes_order_list[1]]
+                # set the value for the COM along the rotation axis to default.
+                generated_com[rotation_axis_index] = simulation_and_display.get_com_value_along_rotation_axis(object_types[i], rotation_axis_index, axis_sign)
 
-            #if the object is the real life hammer, initialize the COM to be in the geometric center
-            if object_types[i]=="hammer" and scene_starts is not None:
-                com_x_range,com_y_range,com_z_range = simulation_and_display.object_type_com_bounds[object_types[i]]["com_bounds"]
-                generated_com = 0.5*(np.array([com_x_range[0],com_y_range[0],com_z_range[0]]) + np.array([com_x_range[1],com_y_range[1],com_z_range[1]]))
+                #TODO: for the sake of a safety margin, consider making things such that one target object is tested at a time, and other objects have GT COMs.
+                #   Problem: all objects are updated simultaneously in find_COM
+                #   I can try a version where find_COM is called separately for each object, but I will need to keep everything consistent with the single-object cases.
+                #   pushing scenarios and other inputs of the same size will have to be rearranged so that only those conforming to the target object can enter.
+                #   losses and errors will need to be printed out as normal.
 
-            #generated_com = p_utils.generate_point(com_x_range, com_y_range, com_z_range)      #random COM
-
-            # set the value for the COM along the rotation axis to default.
-            generated_com[rotation_axis_index] = simulation_and_display.get_com_value_along_rotation_axis(object_types[i], rotation_axis_index, axis_sign)
-
-            #TODO: for the sake of a safety margin, consider making things such that one target object is tested at a time, and other objects have GT COMs.
-            #   Problem: all objects are updated simultaneously in find_COM
-            #   I can try a version where find_COM is called separately for each object, but I will need to keep everything consistent with the single-object cases.
-            #   pushing scenarios and other inputs of the same size will have to be rearranged so that only those conforming to the target object can enter.
-            #   losses and errors will need to be printed out as normal.
-            '''#all non-target objects have the correct COM. TODO need to redo this using object target list
-            if i==0:
                 current_COMs_list.append(generated_com)
-            else:
-                current_COMs_list.append(ground_truth_COMs[i])'''
-            current_COMs_list.append(generated_com)
 
-        #print("current_COMs_list",current_COMs_list)
+            #print("current_COMs_list",current_COMs_list)
 
-        #run the simulations
-        for i,method_name in enumerate(available_methods.keys()):
-            #print(method_name, sample_num, "com:", current_COMs_list)
-            method_dir = os.path.join(this_dir, method_name)
-            os.mkdir(method_dir)
-            losses, accumulated_COMs_list, simulated_data_list = \
-                COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
-                                            pushing_scenarios, pushing_scenario_object_targets,
-                                            starting_data, ground_truth_data,
-                                            object_rotation_axes, object_types,
-                                            current_COMs_list, available_methods[method_name],
-                                            # view_matrix=view_matrix, proj_matrix=proj_matrix,
-                                            shift_plane=shift_plane, scene_starts=scene_starts)
-            '''if method_name=="proposed_method":
+            #run the simulations
+            for i,method_name in enumerate(available_methods.keys()):
+                #print(method_name, sample_num, "com:", current_COMs_list)
+                method_dir = os.path.join(this_dir, method_name)
+                os.mkdir(method_dir)
                 losses, accumulated_COMs_list, simulated_data_list = \
                     COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
-                                                pushing_scenarios, pushing_scenario_object_targets,
-                                                starting_data, ground_truth_data,
-                                                object_rotation_axes, object_types,
-                                                current_COMs_list, available_methods[method_name],
-                                                view_matrix=view_matrix, proj_matrix=proj_matrix,       #TODO restore previous version without this
-                                                shift_plane=shift_plane, scene_starts=scene_starts)
-            else:
-                losses, accumulated_COMs_list, simulated_data_list = \
-                    COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
-                                                pushing_scenarios, pushing_scenario_object_targets,
-                                                starting_data, ground_truth_data,
+                                                pushing_scenarios_this_object, pushing_scenario_object_targets_this_object,
+                                                starting_data, ground_truth_data_this_object,
                                                 object_rotation_axes, object_types,
                                                 current_COMs_list, available_methods[method_name],
                                                 # view_matrix=view_matrix, proj_matrix=proj_matrix,
-                                                shift_plane=shift_plane, scene_starts=scene_starts)'''
+                                                shift_plane=shift_plane, scene_starts=scene_starts_this_object)
+                '''if method_name=="proposed_method":
+                    losses, accumulated_COMs_list, simulated_data_list = \
+                        COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
+                                                    pushing_scenarios_this_object, pushing_scenario_object_targets_this_object,
+                                                    starting_data, ground_truth_data_this_object,
+                                                    object_rotation_axes, object_types,
+                                                    current_COMs_list, available_methods[method_name],
+                                                    view_matrix=view_matrix, proj_matrix=proj_matrix,       #TODO restore previous version without this
+                                                    shift_plane=shift_plane, scene_starts=scene_starts_this_object)
+                else:
+                    losses, accumulated_COMs_list, simulated_data_list = \
+                        COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
+                                                    pushing_scenarios_this_object, pushing_scenario_object_targets_this_object,
+                                                    starting_data, ground_truth_data_this_object,
+                                                    object_rotation_axes, object_types,
+                                                    current_COMs_list, available_methods[method_name],
+                                                    # view_matrix=view_matrix, proj_matrix=proj_matrix,
+                                                    shift_plane=shift_plane, scene_starts=scene_starts_this_object)'''
 
-            losses_across_methods.append(losses)
-            simulated_data_across_methods.append(simulated_data_list)
+                losses_across_methods.append(losses)
+                simulated_data_across_methods.append(simulated_data_list)
 
-            #print COMs data to a csv file
-            accumulated_COMs_list_to_array = []
-            for iter_num in np.arange(number_of_iterations):
-                row_of_numbers = []
-                for object_index in np.arange(number_of_objects):
-                    row_of_numbers += list(accumulated_COMs_list[iter_num][object_index])
-                accumulated_COMs_list_to_array.append(row_of_numbers)
-            accumulated_COMs_array = np.array(accumulated_COMs_list_to_array)
-            file_path = os.path.join(method_dir, "COMs_data.csv")
-            file_handling.write_csv_file(file_path, "rows=iterations, columns=(x y z) for each object", accumulated_COMs_array)
-
-            #if ground truth COM data has been provided, record the COM errors and print the COM errors to csv files
-            if ground_truth_COMs is not None:
-                COM_errors = np.zeros((number_of_objects,number_of_iterations))
+                #print COMs data to a csv file
+                accumulated_COMs_list_to_array = []
                 for iter_num in np.arange(number_of_iterations):
-                    COM_search_methods.update_COM_errors(COM_errors, iter_num, number_of_objects, object_rotation_axes, ground_truth_COMs, accumulated_COMs_list[iter_num])
-                for object_index in np.arange(number_of_objects):
-                    COM_errors_file_path = os.path.join(method_dir, f"COM_errors_object_{object_index}.csv")
-                    file_handling.write_csv_file(COM_errors_file_path, "COM errors (rows=iterations)", COM_errors[object_index].reshape((number_of_iterations,1)))
-    else:
-        #run the simulations
+                    row_of_numbers = list(accumulated_COMs_list[iter_num][object_index_outer_loop])
+                    accumulated_COMs_list_to_array.append(row_of_numbers)
+                accumulated_COMs_array = np.array(accumulated_COMs_list_to_array)
+                file_path = os.path.join(method_dir, f"COMs_data_object_{object_index_outer_loop}.csv")
+                file_handling.write_csv_file(file_path, "rows=iterations, columns=(x y z)", accumulated_COMs_array)
+
+                #if ground truth COM data has been provided, record the COM errors and print the COM errors to csv files
+                if ground_truth_COMs is not None:
+                    COM_errors = np.zeros((number_of_iterations))
+                    for iter_num in np.arange(number_of_iterations):
+                        COM_search_methods.update_COM_errors(COM_errors, iter_num, object_index_outer_loop, object_rotation_axes,
+                                                             ground_truth_COMs,accumulated_COMs_list[iter_num])
+                    COM_errors_file_path = os.path.join(method_dir, f"COM_errors_object_{object_index_outer_loop}.csv")
+                    file_handling.write_csv_file(COM_errors_file_path, "COM errors (rows=iterations)", COM_errors.reshape((number_of_iterations,1)))
+        else:
+            #run the simulations
+            for i,method_name in enumerate(available_methods.keys()):
+                #print(method_name, sample_num, "com:", current_COMs_list)
+                method_dir = os.path.join(this_dir, method_name)
+                os.mkdir(method_dir)
+                losses, simulated_data_list = \
+                    COM_search_methods.test_COMs(number_of_iterations, method_dir, basic_scene_data, pushing_scenarios_this_object, starting_data,
+                                                 ground_truth_data_this_object, object_rotation_axes, COMs_list[i], pushing_scenario_object_targets_this_object,
+                                                 #,view_matrix=view_matrix, proj_matrix=proj_matrix
+                                                 shift_plane=shift_plane, scene_starts=scene_starts_this_object)
+                losses_across_methods.append(losses)
+                simulated_data_across_methods.append(simulated_data_list)
+
+        #print losses and simulation data
         for i,method_name in enumerate(available_methods.keys()):
-            #print(method_name, sample_num, "com:", current_COMs_list)
+            losses = losses_across_methods[i]
+            simulated_data_list = simulated_data_across_methods[i]
             method_dir = os.path.join(this_dir, method_name)
-            os.mkdir(method_dir)
-            losses, simulated_data_list = \
-                COM_search_methods.test_COMs(number_of_iterations, method_dir, basic_scene_data, pushing_scenarios, starting_data,
-                                             ground_truth_data, object_rotation_axes, COMs_list[i], pushing_scenario_object_targets,
-                                             #,view_matrix=view_matrix, proj_matrix=proj_matrix
-                                             shift_plane=shift_plane, scene_starts=scene_starts)
-            losses_across_methods.append(losses)
-            simulated_data_across_methods.append(simulated_data_list)
 
-    #print losses and simulation data
-    for i,method_name in enumerate(available_methods.keys()):
-        losses = losses_across_methods[i]
-        simulated_data_list = simulated_data_across_methods[i]
-        method_dir = os.path.join(this_dir, method_name)
+            # print simulation data to a csv file
+            for pushing_scenario_num in np.arange(len(pushing_scenarios)):
+                simulated_data_list_to_array = []
+                for iter_num in np.arange(number_of_iterations):
+                    row_of_numbers = []
+                    for object_index in np.arange(number_of_objects):
+                        row_of_numbers += list(simulated_data_list[iter_num][pushing_scenario_num][object_index][0])
+                        row_of_numbers += simulated_data_list[iter_num][pushing_scenario_num][object_index][1]
+                    simulated_data_list_to_array.append(row_of_numbers)
+                simulated_data_array = np.array(simulated_data_list_to_array)
+                file_path = os.path.join(method_dir, f"push_{pushing_scenario_indices[pushing_scenario_num]}_data.csv")
+                file_handling.write_csv_file(file_path, "rows=iterations, columns=(x y z orn_x orn_y orn_z orn_w) for each object", simulated_data_array)
 
-        # print simulation data to a csv file
-        for pushing_scenario_num in np.arange(len(pushing_scenarios)):
-            simulated_data_list_to_array = []
-            for iter_num in np.arange(number_of_iterations):
-                row_of_numbers = []
-                for object_index in np.arange(number_of_objects):
-                    row_of_numbers += list(simulated_data_list[iter_num][pushing_scenario_num][object_index][0])
-                    row_of_numbers += simulated_data_list[iter_num][pushing_scenario_num][object_index][1]
-                simulated_data_list_to_array.append(row_of_numbers)
-            simulated_data_array = np.array(simulated_data_list_to_array)
-            file_path = os.path.join(method_dir, f"push_{pushing_scenario_indices[pushing_scenario_num]}_data.csv")
-            file_handling.write_csv_file(file_path, "rows=iterations, columns=(x y z orn_x orn_y orn_z orn_w) for each object", simulated_data_array)
-
-        # print losses to csv files
-        for object_index in np.arange(number_of_objects):
-            #some lines in losses list are all zeros, those are pushes where the current object is not the target of the push.
-            #ignore those lines when recording losses.
-            new_losses_list = []
-            for line in losses[object_index]:
-                sum_of_line = 0.
-                for item in line:
-                    sum_of_line += item
-                if sum_of_line != 0.:
-                    new_losses_list.append(line)
-            losses_file_path = os.path.join(method_dir, f"losses_object_{object_index}.csv")
-            file_handling.write_csv_file(losses_file_path, "losses (rows=pushing scenarios, columns=iterations)", new_losses_list)
+            # print losses to csv files
+            for object_index in np.arange(number_of_objects):
+                #some lines in losses list are all zeros, those are pushes where the current object is not the target of the push.
+                #ignore those lines when recording losses.
+                new_losses_list = []
+                for line in losses[object_index]:
+                    sum_of_line = 0.
+                    for item in line:
+                        sum_of_line += item
+                    if sum_of_line != 0.:
+                        new_losses_list.append(line)
+                losses_file_path = os.path.join(method_dir, f"losses_object_{object_index}.csv")
+                file_handling.write_csv_file(losses_file_path, "losses (rows=pushing scenarios, columns=iterations)", new_losses_list)
 
 
     #done with simulations
@@ -385,12 +398,14 @@ def full_run_one_scene(scene, num_train_test_sessions):
         COMs_list = []
         for i,method_name in enumerate(available_methods.keys()):
             COMs_this_method = []
-            COMs_file = os.path.join(training_dir, method_name, "COMs_data.csv")
-            COMs_data_this_method = file_handling.read_numerical_csv_file(COMs_file)
+            COMs_data_this_method = []
+            for object_index in np.arange(number_of_objects):
+                COMs_file = os.path.join(training_dir, method_name, f"COMs_data_object_{object_index}.csv")
+                COMs_data_this_method.append(file_handling.read_numerical_csv_file(COMs_file))
             for iter_num in np.arange(number_of_iterations):
                 COM_this_iter = []
                 for object_index in np.arange(number_of_objects):
-                    COM_this_iter.append(COMs_data_this_method[iter_num][object_index*3:(object_index+1)*3])
+                    COM_this_iter.append(COMs_data_this_method[object_index][iter_num])
                 COMs_this_method.append(COM_this_iter)
             COMs_list.append(COMs_this_method)
 
@@ -750,8 +765,8 @@ def make_graphs_and_videos_for_scene(scene):
         simulation_and_display.make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_iterations,
                                                       available_methods, scene_data, object_rotation_axes, view_matrix, proj_matrix)
 
-#full_run_one_scene("cracker_box",5)
-#make_graphs_and_videos_for_scene("cracker_box")
+full_run_one_scene("cracker_box",5)
+make_graphs_and_videos_for_scene("cracker_box")
 
 #full_run_one_scene("sugar_box",5)
 #make_graphs_and_videos_for_scene("sugar_box")
@@ -773,14 +788,14 @@ def make_graphs_and_videos_for_scene(scene):
 
 
 
-full_run_one_scene("clutter_1",5)
-make_graphs_and_videos_for_scene("clutter_1")
+#full_run_one_scene("clutter_1",5)
+#make_graphs_and_videos_for_scene("clutter_1")
 
-full_run_one_scene("clutter_2",5)
-make_graphs_and_videos_for_scene("clutter_2")
+#full_run_one_scene("clutter_2",5)
+#make_graphs_and_videos_for_scene("clutter_2")
 
-full_run_one_scene("clutter_3",5)
-make_graphs_and_videos_for_scene("clutter_3")
+#full_run_one_scene("clutter_3",5)
+#make_graphs_and_videos_for_scene("clutter_3")
 
 
 

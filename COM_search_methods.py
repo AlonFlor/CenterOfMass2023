@@ -77,15 +77,14 @@ def update_losses(losses, iter_num, number_of_objects, number_of_pushing_scenari
                     180. * abs(sim_angles[pushing_scenario_index][object_index] - gt_angles[pushing_scenario_index][object_index]) / np.pi
 
 
-def update_COM_errors(COM_errors, iter_num, number_of_objects, object_rotation_axes, ground_truth_COMs, current_COMs_list):
-    for object_index in np.arange(number_of_objects):
-        rotation_axis_index = object_rotation_axes[object_index][0]
-        ground_truth_COM_planar = ground_truth_COMs[object_index] + np.array([0., 0., 0.])
-        ground_truth_COM_planar[rotation_axis_index] = 0.
-        current_COM_planar = current_COMs_list[object_index] + np.array([0., 0., 0.])
-        current_COM_planar[rotation_axis_index] = 0.
-        error = np.linalg.norm(ground_truth_COM_planar - current_COM_planar)
-        COM_errors[object_index][iter_num] = error
+def update_COM_errors(COM_errors, iter_num, object_index, object_rotation_axes, ground_truth_COMs, current_COMs_list):
+    rotation_axis_index = object_rotation_axes[object_index][0]
+    ground_truth_COM_planar = ground_truth_COMs[object_index] + np.array([0., 0., 0.])
+    ground_truth_COM_planar[rotation_axis_index] = 0.
+    current_COM_planar = current_COMs_list[object_index] + np.array([0., 0., 0.])
+    current_COM_planar[rotation_axis_index] = 0.
+    error = np.linalg.norm(ground_truth_COM_planar - current_COM_planar)
+    COM_errors[iter_num] = error
 
 
 
