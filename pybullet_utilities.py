@@ -480,8 +480,7 @@ def make_body(object_type, held_fixed_bool, com=None):
         if not os.path.isfile(object_collision_mesh_file):
             object_collision_mesh_file = object_mesh_file
 
-    obj_coll = p.createCollisionShape(p.GEOM_MESH,
-                                      fileName=object_collision_mesh_file)  # , collisionFramePosition=neg_com)
+    obj_coll = p.createCollisionShape(p.GEOM_MESH, fileName=object_collision_mesh_file)  # , collisionFramePosition=neg_com)
     obj_vis = p.createVisualShape(p.GEOM_MESH, fileName=object_mesh_file)  # , visualFramePosition=neg_com)
     if com is None:
         objectID = p.createMultiBody((0. if held_fixed_bool else 1.), obj_coll, obj_vis)

@@ -15,12 +15,16 @@ object_type_com_bounds["sugar_box"] = p_utils.get_com_bounds_for_object_type("su
 object_type_com_bounds["mustard_bottle"] = p_utils.get_com_bounds_for_object_type("mustard_bottle", 0.7, 0.7, 0.7)
 object_type_com_bounds["bleach_cleanser"] = p_utils.get_com_bounds_for_object_type("bleach_cleanser", 0.5, 1.0, 0.7)
 object_type_com_bounds["hammer"] = p_utils.get_com_bounds_for_object_type("hammer", 0.4, 0.9, 0.9)
+object_type_com_bounds["new_sugar_box"] = p_utils.get_com_bounds_for_object_type("new_sugar_box", 0.7, 0.7, 0.7)
+object_type_com_bounds["chess_board"] = p_utils.get_com_bounds_for_object_type("chess_board", 0.7, 0.7, 0.7)
+object_type_com_bounds["chess_board_weighted"] = p_utils.get_com_bounds_for_object_type("chess_board_weighted", 0.7, 0.7, 0.7)
+object_type_com_bounds["wooden_rod"] = p_utils.get_com_bounds_for_object_type("wooden_rod", 0.4, 0.9, 0.9)
 
 
 push_distance = 0.1
-cylinder_height_offset = np.array([0., 0., 0.03])
+cylinder_height_offset = np.array([0., 0., -0.01])
 
-scene_name = "sugar_box"
+scene_name = "wooden_rod"
 scene_dir = os.path.join("scenes",scene_name+"_real")
 push_number = int(input("Push number (0 for before first push): "))
 num_string = "" if push_number==0 else "_after_push_"+ str(push_number-1)

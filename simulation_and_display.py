@@ -17,6 +17,10 @@ object_type_com_bounds["sugar_box"] = p_utils.get_com_bounds_for_object_type("su
 object_type_com_bounds["mustard_bottle"] = p_utils.get_com_bounds_for_object_type("mustard_bottle", 0.7, 1.0, 0.6)
 object_type_com_bounds["bleach_cleanser"] = p_utils.get_com_bounds_for_object_type("bleach_cleanser", 0.5, 1.0, 0.7)
 object_type_com_bounds["hammer"] = p_utils.get_com_bounds_for_object_type("hammer", 0.4, 0.9, 0.9)
+object_type_com_bounds["new_sugar_box"] = p_utils.get_com_bounds_for_object_type("new_sugar_box", 0.7, 0.7, 0.7)
+object_type_com_bounds["chess_board"] = p_utils.get_com_bounds_for_object_type("chess_board", 0.7, 0.7, 0.7)
+object_type_com_bounds["chess_board_weighted"] = p_utils.get_com_bounds_for_object_type("chess_board_weighted", 0.7, 0.7, 0.7)
+object_type_com_bounds["wooden_rod"] = p_utils.get_com_bounds_for_object_type("wooden_rod", 0.4, 0.9, 0.9)
 
 #real life centers of mass of objects, found via human skill. The value 0 is put as a placeholder where there is a rotation axis.
 real_life_coms = {}
@@ -25,6 +29,10 @@ real_life_coms["bleach_cleanser"] = np.array([-0.02,0.,0.11])
 real_life_coms["mustard_bottle"] = np.array([-0.005,0.,0.0975])
 real_life_coms["hammer"] = np.array([-0.03,0.0775169,0.])
 real_life_coms["sugar_box"] = np.array([0.,-0.0175,0.09])
+real_life_coms["new_sugar_box"] = np.array([0.,0.,0.])
+real_life_coms["chess_board"] = np.array([0.,0.,0.])
+real_life_coms["chess_board_weighted"] = np.array([0.,-0.05,0.])
+real_life_coms["wooden_rod"] = np.array([0.,0.,0.])
 
 
 def get_com_value_along_rotation_axis(object_type, rotation_axis_index, axis_sign):
@@ -151,10 +159,17 @@ def draw_graphs(test_dir, test_names, average_errors_list, std_dev_errors_list, 
 
 
 
-def display_COMs(mobile_object_IDs, sim_data, ranges_lists, object_rotation_axes, is_ground_truth):
+def display_COMs(mobile_object_IDs, sim_data, ranges_lists, object_rotation_axes, is_ground_truth, target_object_index=None):
     for i in np.arange(len(mobile_object_IDs)):
+        if target_object_index is not None:
+            if i != target_object_index:
+                continue
+
         object_id = mobile_object_IDs[i]
-        pos, orn = sim_data[i]
+        if target_object_index is not None:
+            pos, orn = sim_data
+        else:
+            pos, orn = sim_data[i]
 
         current_COM = p.getDynamicsInfo(object_id, -1)[3]
         COM_display_point_wc = p_utils.get_world_space_point(current_COM, pos, orn)
@@ -169,7 +184,8 @@ def display_COMs(mobile_object_IDs, sim_data, ranges_lists, object_rotation_axes
 
 
 def make_images(scenario_dir, basic_scene_data, object_rotation_axes, view_matrix, proj_matrix, number_of_pushing_scenarios,
-                number_of_iterations=1, push_indices=None, gt_coms=None, number_of_objects=None, shift_plane=None):
+                number_of_iterations=1, push_indices=None, gt_coms=None, number_of_objects=None, shift_plane=None, target_object_indices=None):
+
 
     for pushing_scenario_index in np.arange(number_of_pushing_scenarios):
         if gt_coms is not None:
@@ -177,18 +193,29 @@ def make_images(scenario_dir, basic_scene_data, object_rotation_axes, view_matri
         else:
             sim_data = file_handling.read_numerical_csv_file(os.path.join(scenario_dir, f"push_{push_indices[pushing_scenario_index]}_data.csv"))
 
-        coms_data_path = os.path.join(scenario_dir, f"COMs_data.csv")
+        target_object_index = 0
+        if target_object_indices is not None:
+            target_object_index = target_object_indices[push_indices[pushing_scenario_index]]
+
+        print("scenario_dir",scenario_dir)
+        coms_data_path = os.path.join(scenario_dir, f"COMs_data_object_{target_object_index}.csv")
         full_coms_data = None
         if os.path.isfile(coms_data_path):
-            full_coms_data = file_handling.read_numerical_csv_file(coms_data_path).reshape((number_of_iterations, number_of_objects, 3))
+            full_coms_data = file_handling.read_numerical_csv_file(coms_data_path).reshape((number_of_iterations, 3))
 
         for iter_num in np.arange(number_of_iterations):
             #get centers of mass
             if gt_coms is not None:
                 coms_data = gt_coms
             else:
-                coms_data = full_coms_data[iter_num]
+                object_coms_data = full_coms_data[iter_num]
+                coms_data = []
+                print("basic_scene_data",basic_scene_data)
+                for data in basic_scene_data:
+                    coms_data.append((data[1],data[2],data[3]))
+                coms_data[target_object_index] = object_coms_data
 
+            print(coms_data)
             scene_data = p_utils.scene_data_change_COMs(basic_scene_data, coms_data)
 
             #open the scene
@@ -203,24 +230,30 @@ def make_images(scenario_dir, basic_scene_data, object_rotation_axes, view_matri
                 ranges_lists.append(ranges_list)
 
             #set the objects
-            pos_orn_list = []
-            for object_index in np.arange(len(mobile_object_IDs)):
-                current_COM = np.array(coms_data[object_index])
-                pos_orn = sim_data[iter_num][object_index*7:(object_index+1)*7]
-                pos = pos_orn[:3]
-                orn = pos_orn[3:]
-                pos_orn_list.append((pos,orn))
-
-                current_COM_oriented = p_utils.rotate_vector(current_COM, orn)
-                pos_adjusted = np.array(pos) + current_COM_oriented
-                p.resetBasePositionAndOrientation(mobile_object_IDs[object_index], pos_adjusted, orn)
-
-            #print
             if gt_coms is not None:
+                pos_orn_list = []
+                for object_index in np.arange(len(mobile_object_IDs)):
+                    current_COM = np.array(coms_data[object_index])
+                    pos_orn = sim_data[iter_num][object_index*7:(object_index+1)*7]
+                    pos = pos_orn[:3]
+                    orn = pos_orn[3:]
+                    pos_orn_list.append((pos,orn))
+
+                    current_COM_oriented = p_utils.rotate_vector(current_COM, orn)
+                    pos_adjusted = np.array(pos) + current_COM_oriented
+                    p.resetBasePositionAndOrientation(mobile_object_IDs[object_index], pos_adjusted, orn)
+
                 display_COMs(mobile_object_IDs, pos_orn_list, ranges_lists, object_rotation_axes, is_ground_truth=True)
                 p_utils.print_image(view_matrix, proj_matrix, scenario_dir, extra_message=f"iter_{iter_num}")
             else:
-                display_COMs(mobile_object_IDs, pos_orn_list, ranges_lists, object_rotation_axes, is_ground_truth=False)
+                current_COM = np.array(coms_data[target_object_index])
+                pos_orn = sim_data[iter_num]
+                pos = pos_orn[:3]
+                orn = pos_orn[3:]
+                current_COM_oriented = p_utils.rotate_vector(current_COM, orn)
+                pos_adjusted = np.array(pos) + current_COM_oriented
+                p.resetBasePositionAndOrientation(mobile_object_IDs[target_object_index], pos_adjusted, orn)
+                display_COMs(mobile_object_IDs, (pos,orn), ranges_lists, object_rotation_axes, is_ground_truth=False, target_object_index=target_object_index)
                 p_utils.print_image(view_matrix, proj_matrix, scenario_dir, extra_message=f"push_{push_indices[pushing_scenario_index]}_iter_{iter_num}")
 
             #reset
@@ -287,11 +320,15 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
 
                 if include_COMs:
                     COM_errors_file_path = os.path.join(method_dir, f"COM_errors_object_{object_index}.csv")
-                    COM_errors = file_handling.read_numerical_csv_file(COM_errors_file_path)[:number_of_iterations]
+                    if os.path.isfile(COM_errors_file_path):
+                        COM_errors = file_handling.read_numerical_csv_file(COM_errors_file_path)[:number_of_iterations]
+                    else:
+                        break
 
 
                 #Keeping only the best-so-far at each iteration. Losses determine what counts as best.
                 losses = file_handling.read_numerical_csv_file(os.path.join(method_dir, f"losses_object_{object_index}.csv"))
+                print("object_index",object_index,"\n",losses)
                 best_loss = np.mean(losses[:,0])
                 iterations_to_keep = []
                 for iteration_index in np.arange(number_of_iterations):
@@ -324,7 +361,11 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
             for i, method_name in enumerate(available_methods.keys()):
                 method_dir = os.path.join(test_dir, test_session_dir, method_name)
 
-                losses = file_handling.read_numerical_csv_file(os.path.join(method_dir, f"losses_object_{object_index}.csv"))[:,:number_of_iterations]
+                losses_file_path = os.path.join(method_dir, f"losses_object_{object_index}.csv")
+                if os.path.isfile(losses_file_path):
+                    losses = file_handling.read_numerical_csv_file(losses_file_path)[:,:number_of_iterations]
+                else:
+                    break
                 for push_scenario_row_index in np.arange(losses.shape[0]):
                     for iteration_index in np.arange(number_of_iterations):
                         losses[push_scenario_row_index][iteration_index] = losses[push_scenario_row_index][iterations_script_list[object_index][i][iteration_index]]
@@ -335,6 +376,8 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
         if include_COMs:
             COM_errors_list_array = np.array(COM_errors_list[object_index])
         losses_list_array = np.array(losses_list[object_index])
+        if losses_list_array.shape[-1]==0:
+            continue
 
         if include_COMs:
             print("COM_errors_list_array.shape",COM_errors_list_array.shape)
@@ -363,6 +406,26 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
             draw_graphs(test_dir, test_names, None, None, average_losses, std_dev_losses, object_types[object_index], include_COMs=False)
 
     '''if include_COMs:
+        #get target objects
+        dirs_to_search = os.listdir(test_dir)
+        gt_dirs = []
+        for candidate_dir in dirs_to_search:
+            if candidate_dir.startswith("ground_truth_push_"):
+                gt_dirs.append(candidate_dir)
+        object_target_tuples = []
+        total_number_of_pushes = 0
+        for gt_dir in gt_dirs:
+            push_number = int(gt_dir.split("_")[-1])
+            total_number_of_pushes = max(total_number_of_pushes, push_number+1)
+            target_object_index_file = open(os.path.join(test_dir, gt_dir, "target_object.txt"), "r")
+            object_target_tuples.append((push_number, int(target_object_index_file.read())))
+            target_object_index_file.close()
+        target_object_indices = []
+        for i in np.arange(total_number_of_pushes):
+            target_object_indices.append(None)
+        for object_target_tuple in object_target_tuples:
+            target_object_indices[object_target_tuple[0]] = object_target_tuple[1]
+
         #make videos of selected samples
         for train_session_dir in scene_train_dirs:
             for i,method_name in enumerate(available_methods.keys()):
@@ -375,7 +438,7 @@ def make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_
 
                 method_dir = os.path.join(test_dir, train_session_dir, method_name)
                 make_images(method_dir,basic_scene_data, object_rotation_axes, view_matrix, proj_matrix, len(push_indices), number_of_iterations,
-                            push_indices=push_indices, number_of_objects=number_of_objects)
+                            push_indices=push_indices, number_of_objects=number_of_objects, target_object_indices=target_object_indices)
 
                 for scene_push_index in push_indices:
                     make_end_states_videos(scene_push_index, method_dir, test_dir, number_of_iterations)'''

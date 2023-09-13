@@ -46,6 +46,10 @@ object_type_com_bounds["sugar_box"] = p_utils.get_com_bounds_for_object_type("su
 object_type_com_bounds["mustard_bottle"] = p_utils.get_com_bounds_for_object_type("mustard_bottle", 0.7, 0.7, 0.7)
 object_type_com_bounds["bleach_cleanser"] = p_utils.get_com_bounds_for_object_type("bleach_cleanser", 0.5, 1.0, 0.7)
 object_type_com_bounds["hammer"] = p_utils.get_com_bounds_for_object_type("hammer", 0.4, 0.9, 0.9)
+object_type_com_bounds["new_sugar_box"] = p_utils.get_com_bounds_for_object_type("new_sugar_box", 0.7, 0.7, 0.7)
+object_type_com_bounds["chess_board"] = p_utils.get_com_bounds_for_object_type("chess_board", 0.7, 0.7, 0.7)
+object_type_com_bounds["chess_board_weighted"] = p_utils.get_com_bounds_for_object_type("chess_board_weighted", 0.7, 0.7, 0.7)
+object_type_com_bounds["wooden_rod"] = p_utils.get_com_bounds_for_object_type("wooden_rod", 0.4, 0.9, 0.9)
 
 
 point_x_range = (-0.1,0.1)
@@ -53,7 +57,7 @@ point_y_range = (-0.1,0.1)
 point_z_range = (0.05,0.06)#(0.2, 0.3)
 #TODO single objects occupy more or less the center, clutter should be set only semi-randomnly.
 
-available_objects = ["cracker_box", "pudding_box", "master_chef_can", "hammer", "mustard_bottle", "sugar_box", "bleach_cleanser"]
+available_objects = ["cracker_box", "pudding_box", "master_chef_can", "hammer", "mustard_bottle", "sugar_box", "bleach_cleanser", "new_sugar_box"]
 #number_of_each_object = [1, 1, 1, 1, 0, 0, 0]
 number_of_each_object = [0, 0, 0, 0, 0, 0, 1]
 object_COMs = [(-0.01,-0.01,0.08), (0.0,0.0,0.015), (-0.015,-0.01,0.06),  (-0.03,0.0775169,0.015), (-0.005,-0.027,0.07), (-0.005,-0.03,0.12), (-0.025,0.012,0.1)]

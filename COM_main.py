@@ -54,6 +54,7 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
     pushing_scenarios_file = os.path.join(this_dir, "pushing_scenario_indices.csv")
     file_handling.write_csv_file(pushing_scenarios_file, "index of original scene pushing scenario", np.array(pushing_scenario_indices).reshape((len(pushing_scenario_indices),1)))
     print("pushing_scenario_indices",pushing_scenario_indices)
+    print("pushing_scenario_object_targets",pushing_scenario_object_targets)
 
     #get ground truth motion data
     ground_truth_data = []
@@ -74,17 +75,23 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
 
     sim_start = time.perf_counter_ns()
 
-    losses_across_methods = []
-    simulated_data_across_methods = []
+
     for object_index_outer_loop in np.arange(number_of_objects):
+        print(f"doing object {object_index_outer_loop}, the",object_types[object_index_outer_loop])
         pushing_scenario_indices_this_object = []
         for pushing_scenario_index, object_index in enumerate(pushing_scenario_object_targets):
             if object_index == object_index_outer_loop:
                 pushing_scenario_indices_this_object.append(pushing_scenario_index)
+        if len(pushing_scenario_indices_this_object)==0:
+            continue
+        print("pushing using pushes of indices",pushing_scenario_indices_this_object)
         pushing_scenarios_this_object = []
         ground_truth_data_this_object = []
+        losses_across_methods = []
+        simulated_data_across_methods = []
         pushing_scenario_object_targets_this_object = []    #redundant, I know, but I don't care anymore
         for pushing_scenario_index in pushing_scenario_indices_this_object:
+            print("index to use",pushing_scenario_index)
             pushing_scenarios_this_object.append(pushing_scenarios[pushing_scenario_index])
             ground_truth_data_this_object.append(ground_truth_data[pushing_scenario_index])
             pushing_scenario_object_targets_this_object.append(pushing_scenario_object_targets[pushing_scenario_index])
@@ -147,12 +154,6 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
                 # set the value for the COM along the rotation axis to default.
                 generated_com[rotation_axis_index] = simulation_and_display.get_com_value_along_rotation_axis(object_types[i], rotation_axis_index, axis_sign)
 
-                #TODO: for the sake of a safety margin, consider making things such that one target object is tested at a time, and other objects have GT COMs.
-                #   Problem: all objects are updated simultaneously in find_COM
-                #   I can try a version where find_COM is called separately for each object, but I will need to keep everything consistent with the single-object cases.
-                #   pushing scenarios and other inputs of the same size will have to be rearranged so that only those conforming to the target object can enter.
-                #   losses and errors will need to be printed out as normal.
-
                 current_COMs_list.append(generated_com)
 
             #print("current_COMs_list",current_COMs_list)
@@ -161,16 +162,17 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
             for i,method_name in enumerate(available_methods.keys()):
                 #print(method_name, sample_num, "com:", current_COMs_list)
                 method_dir = os.path.join(this_dir, method_name)
-                os.mkdir(method_dir)
-                losses, accumulated_COMs_list, simulated_data_list = \
+                if not os.path.isdir(method_dir):
+                    os.mkdir(method_dir)
+                '''losses, accumulated_COMs_list, simulated_data_list = \
                     COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
                                                 pushing_scenarios_this_object, pushing_scenario_object_targets_this_object,
                                                 starting_data, ground_truth_data_this_object,
                                                 object_rotation_axes, object_types,
                                                 current_COMs_list, available_methods[method_name],
                                                 # view_matrix=view_matrix, proj_matrix=proj_matrix,
-                                                shift_plane=shift_plane, scene_starts=scene_starts_this_object)
-                '''if method_name=="proposed_method":
+                                                shift_plane=shift_plane, scene_starts=scene_starts_this_object)'''
+                if method_name=="proposed_method":
                     losses, accumulated_COMs_list, simulated_data_list = \
                         COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
                                                     pushing_scenarios_this_object, pushing_scenario_object_targets_this_object,
@@ -187,7 +189,7 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
                                                     object_rotation_axes, object_types,
                                                     current_COMs_list, available_methods[method_name],
                                                     # view_matrix=view_matrix, proj_matrix=proj_matrix,
-                                                    shift_plane=shift_plane, scene_starts=scene_starts_this_object)'''
+                                                    shift_plane=shift_plane, scene_starts=scene_starts_this_object)
 
                 losses_across_methods.append(losses)
                 simulated_data_across_methods.append(simulated_data_list)
@@ -214,7 +216,8 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
             for i,method_name in enumerate(available_methods.keys()):
                 #print(method_name, sample_num, "com:", current_COMs_list)
                 method_dir = os.path.join(this_dir, method_name)
-                os.mkdir(method_dir)
+                if not os.path.isdir(method_dir):
+                    os.mkdir(method_dir)
                 losses, simulated_data_list = \
                     COM_search_methods.test_COMs(number_of_iterations, method_dir, basic_scene_data, pushing_scenarios_this_object, starting_data,
                                                  ground_truth_data_this_object, object_rotation_axes, COMs_list[i], pushing_scenario_object_targets_this_object,
@@ -230,31 +233,29 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
             method_dir = os.path.join(this_dir, method_name)
 
             # print simulation data to a csv file
-            for pushing_scenario_num in np.arange(len(pushing_scenarios)):
+            for pushing_scenario_num in np.arange(len(pushing_scenarios_this_object)):
                 simulated_data_list_to_array = []
                 for iter_num in np.arange(number_of_iterations):
-                    row_of_numbers = []
-                    for object_index in np.arange(number_of_objects):
-                        row_of_numbers += list(simulated_data_list[iter_num][pushing_scenario_num][object_index][0])
-                        row_of_numbers += simulated_data_list[iter_num][pushing_scenario_num][object_index][1]
+                    row_of_numbers = list(simulated_data_list[iter_num][pushing_scenario_num][object_index_outer_loop][0])
+                    row_of_numbers += simulated_data_list[iter_num][pushing_scenario_num][object_index_outer_loop][1]
                     simulated_data_list_to_array.append(row_of_numbers)
                 simulated_data_array = np.array(simulated_data_list_to_array)
-                file_path = os.path.join(method_dir, f"push_{pushing_scenario_indices[pushing_scenario_num]}_data.csv")
-                file_handling.write_csv_file(file_path, "rows=iterations, columns=(x y z orn_x orn_y orn_z orn_w) for each object", simulated_data_array)
+                file_path = os.path.join(method_dir, f"push_{pushing_scenario_indices[pushing_scenario_indices_this_object[pushing_scenario_num]]}_data.csv")
+                print("printing push",file_path)
+                file_handling.write_csv_file(file_path, "rows=iterations, columns=(x y z orn_x orn_y orn_z orn_w) for target object", simulated_data_array)
 
             # print losses to csv files
-            for object_index in np.arange(number_of_objects):
-                #some lines in losses list are all zeros, those are pushes where the current object is not the target of the push.
-                #ignore those lines when recording losses.
-                new_losses_list = []
-                for line in losses[object_index]:
-                    sum_of_line = 0.
-                    for item in line:
-                        sum_of_line += item
-                    if sum_of_line != 0.:
-                        new_losses_list.append(line)
-                losses_file_path = os.path.join(method_dir, f"losses_object_{object_index}.csv")
-                file_handling.write_csv_file(losses_file_path, "losses (rows=pushing scenarios, columns=iterations)", new_losses_list)
+            # some lines in losses list are all zeros, those are pushes where the current object is not the target of the push.
+            # ignore those lines when recording losses.
+            new_losses_list = []
+            for line in losses[object_index_outer_loop]:
+                sum_of_line = 0.
+                for item in line:
+                    sum_of_line += item
+                if sum_of_line != 0.:
+                    new_losses_list.append(line)
+            losses_file_path = os.path.join(method_dir, f"losses_object_{object_index_outer_loop}.csv")
+            file_handling.write_csv_file(losses_file_path, "losses (rows=pushing scenarios, columns=iterations)", new_losses_list)
 
 
     #done with simulations
@@ -602,9 +603,9 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
                 scene_loc = os.path.join("scenes", scene, f"scene_after_push_{i-1}.csv")
         print("scene_loc start",scene_loc)
         scene_data = file_handling.read_csv_file(scene_loc, [str, float, float, float, float, float, float, float, float, float, float, int])[:-1]
-        #scene_data = untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shift_plane,
-        #                                                  pushing_scenario=pushing_scenarios[i], push_object_target=pushing_scenario_object_targets[i])
-        #TODO maybe restore untilt?
+        scene_data = untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shift_plane,
+                                                          pushing_scenario=pushing_scenarios[i], push_object_target=pushing_scenario_object_targets[i])
+        #TODO: note that untilt code was inactive for the single-object lab case
         #pushing_scenarios[i] = new_push
         scene_starts.append(scene_data)
 
@@ -616,6 +617,11 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
         scene_data = file_handling.read_csv_file(scene_loc, [str, float, float, float, float, float, float, float, float, float, float, int])[:-1]
         scene_data = untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shift_plane, ground_truth_folder=ground_truth_folder)
         scene_ends.append(scene_data)
+
+        #write down the index of the object this push is targeting
+        target_object_file = open(os.path.join(ground_truth_folder, "target_object.txt"), "w")
+        target_object_file.write(str(pushing_scenario_object_targets[i]))
+        target_object_file.close()
 
     #adjust pushing scenarios so that the end point of the push aligns with the target object's ground truth location.
     #This assumes that the push's direction aligns with the robot arm's direction of motion
@@ -689,6 +695,7 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
                 testing_scene_starts.append(scene_starts[i])
                 pushing_scenario_testing_object_targets.append(pushing_scenario_object_targets[i])
                 testing_pushes_set.append(i)
+        print(training_pushes_set)
 
         # train to get the COMs for each method
         training_dir = os.path.join(test_dir, f"test_session_{train_test_session_index}_training")
@@ -700,14 +707,22 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
 
         # read COM data from training
         COMs_list = []
-        for i, method_name in enumerate(available_methods.keys()):
+        for i,method_name in enumerate(available_methods.keys()):
             COMs_this_method = []
-            COMs_file = os.path.join(training_dir, method_name, "COMs_data.csv")
-            COMs_data_this_method = file_handling.read_numerical_csv_file(COMs_file)
+            COMs_data_this_method = []
+            for object_index in np.arange(number_of_objects):
+                COMs_file = os.path.join(training_dir, method_name, f"COMs_data_object_{object_index}.csv")
+                if os.path.isfile(COMs_file):
+                    COMs_data_this_method.append(file_handling.read_numerical_csv_file(COMs_file))
+                else:
+                    COMs_data_this_method.append(ground_truth_COMs[object_index])       #non-target objects are tested using their ground truth COMs
             for iter_num in np.arange(number_of_iterations):
                 COM_this_iter = []
-                for object_index in np.arange(number_of_objects):
-                    COM_this_iter.append(COMs_data_this_method[iter_num][object_index * 3:(object_index + 1) * 3])
+                for object_index in np.arange(len(COMs_data_this_method)):
+                    if len(COMs_data_this_method[object_index].shape)==1:
+                        COM_this_iter.append(COMs_data_this_method[object_index])
+                    else:
+                        COM_this_iter.append(COMs_data_this_method[object_index][iter_num])
                 COMs_this_method.append(COM_this_iter)
             COMs_list.append(COMs_this_method)
 
@@ -750,7 +765,7 @@ def make_graphs_and_videos_for_scene(scene):
         p.setGravity(0, 0, -9.8)
 
         simulation_and_display.make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_iterations,
-                                                      available_methods, None, object_rotation_axes, view_matrix, proj_matrix)
+                                                      available_methods, scene_data, object_rotation_axes, view_matrix, proj_matrix)
     else:
         view_matrix = view_matrix_simulated_cases
         proj_matrix = proj_matrix_simulated_cases
@@ -765,8 +780,8 @@ def make_graphs_and_videos_for_scene(scene):
         simulation_and_display.make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_iterations,
                                                       available_methods, scene_data, object_rotation_axes, view_matrix, proj_matrix)
 
-full_run_one_scene("cracker_box",5)
-make_graphs_and_videos_for_scene("cracker_box")
+#full_run_one_scene("cracker_box",5)
+#make_graphs_and_videos_for_scene("cracker_box")
 
 #full_run_one_scene("sugar_box",5)
 #make_graphs_and_videos_for_scene("sugar_box")
@@ -812,9 +827,24 @@ make_graphs_and_videos_for_scene("cracker_box")
 
 #full_run_one_scene_lab("mustard_bottle_real",2)
 
+#full_run_one_scene_lab("chess_board_real",2)
+#make_graphs_and_videos_for_scene("chess_board_real")
+
+#full_run_one_scene_lab("chess_board_weighted_real",2)
+#make_graphs_and_videos_for_scene("chess_board_weighted_real")
+
+full_run_one_scene_lab("wooden_rod_real",2)
+make_graphs_and_videos_for_scene("wooden_rod_real")
+
 
 
 #full_run_one_scene_lab("clutter_1_real",2)
+#make_graphs_and_videos_for_scene("clutter_1_real")
+
+#full_run_one_scene_lab("clutter_2_real",2)
+#make_graphs_and_videos_for_scene("clutter_2_real")
+
+
 #full_run_one_scene_lab("clutter_2_real",2)
 
 

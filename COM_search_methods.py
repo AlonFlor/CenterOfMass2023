@@ -13,11 +13,19 @@ base_learning_rates["sugar_box"] = 0.1
 base_learning_rates["mustard_bottle"] = 0.15
 base_learning_rates["bleach_cleanser"] = 0.17
 base_learning_rates["hammer"] = 0.17
+base_learning_rates["new_sugar_box"] = 0.1
+base_learning_rates["chess_board"] = 0.25
+base_learning_rates["chess_board_weighted"] = 0.25
+base_learning_rates["wooden_rod"] = 0.17
 
 base_learning_rates_lab = {}
 base_learning_rates_lab["cracker_box"] = base_learning_rates["cracker_box"] / 3
 base_learning_rates_lab["sugar_box"] = base_learning_rates["sugar_box"] / 3
 base_learning_rates_lab["hammer"] = base_learning_rates["hammer"]
+base_learning_rates_lab["new_sugar_box"] = base_learning_rates["new_sugar_box"] / 3
+base_learning_rates_lab["chess_board"] = base_learning_rates["chess_board"] / 3
+base_learning_rates_lab["chess_board_weighted"] = base_learning_rates["chess_board_weighted"] / 3
+base_learning_rates_lab["wooden_rod"] = base_learning_rates["wooden_rod"]
 
 
 base_learning_rates_clutter = {}
@@ -25,9 +33,19 @@ base_learning_rates_clutter["cracker_box"] = base_learning_rates["cracker_box"]
 base_learning_rates_clutter["master_chef_can"] = 1.5*base_learning_rates["master_chef_can"]
 base_learning_rates_clutter["pudding_box"] = 3.*base_learning_rates["pudding_box"]
 base_learning_rates_clutter["sugar_box"] = 3.*base_learning_rates["sugar_box"]
-base_learning_rates_clutter["mustard_bottle"] = base_learning_rates["mustard_bottle"]
-base_learning_rates_clutter["bleach_cleanser"] = base_learning_rates["bleach_cleanser"]
+base_learning_rates_clutter["mustard_bottle"] = 3.*base_learning_rates["mustard_bottle"]
+base_learning_rates_clutter["bleach_cleanser"] = 3.*base_learning_rates["bleach_cleanser"]
 base_learning_rates_clutter["hammer"] = base_learning_rates["hammer"]
+base_learning_rates_clutter["chess_board"] = base_learning_rates["chess_board"]
+base_learning_rates_clutter["chess_board_weighted"] = base_learning_rates["chess_board_weighted"]
+
+base_learning_rates_clutter_lab = {}
+base_learning_rates_clutter_lab["cracker_box"] = base_learning_rates_clutter["cracker_box"] / 2.5
+base_learning_rates_clutter_lab["sugar_box"] = base_learning_rates_clutter["sugar_box"] / 4
+base_learning_rates_clutter_lab["hammer"] = base_learning_rates_clutter["hammer"]
+base_learning_rates_clutter_lab["new_sugar_box"] = base_learning_rates["new_sugar_box"] / 3
+base_learning_rates_clutter_lab["chess_board"] = base_learning_rates["chess_board"] / 3
+base_learning_rates_clutter_lab["chess_board_weighted"] = base_learning_rates["chess_board_weighted"] / 3
 
 
 def get_sim_and_gt_angles(starting_data, this_scene_data, ground_truth_data, object_rotation_axes, number_of_pushing_scenarios, number_of_objects, scene_starts = None):
@@ -281,7 +299,9 @@ def proposed_search_method(pushing_scenarios, pushing_scenario_object_targets, n
                 base_learning_rate = base_learning_rates_clutter[object_types[object_index]] #clutter learning rate
             if scene_starts is not None:
                 base_learning_rate = base_learning_rates_lab[object_types[object_index]]  #single-object learning rate
-            print(base_learning_rate)
+                if number_of_objects > 1:
+                    base_learning_rate = base_learning_rates_clutter_lab[object_types[object_index]]  #clutter learning rate
+            print("base_learning_rate",base_learning_rate)
             learning_rate = base_learning_rate * (0.95**(float(len(accumulated_COMs_list))))
             single_push_COM_change = learning_rate * basic_change_to_com
             COM_changes += single_push_COM_change
@@ -344,8 +364,7 @@ def find_COM(number_of_iterations, test_dir, basic_scene_data, pushing_scenarios
                 #using lab data
                 scene_data = p_utils.scene_data_change_COMs(scene_starts[i], current_COMs_list)
                 use_box_pusher = True
-            new_test_dir = os.path.join(test_dir,f"push_{i}_in_list")
-            #TODO get rid of new_test_dir
+            new_test_dir = os.path.join(test_dir,f"push_{i}_in_list_for_object_{pushing_scenario_object_targets[i]}")
             if not os.path.isdir(new_test_dir):
                 os.mkdir(new_test_dir)
             this_scene_data.append(simulation_and_display.run_attempt(scene_data, new_test_dir, iter_num, point_1, point_2,
