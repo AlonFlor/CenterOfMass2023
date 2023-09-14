@@ -18,22 +18,22 @@ base_learning_rates["chess_board_weighted"] = 0.07
 base_learning_rates["wooden_rod"] = 0.05
 
 base_learning_rates_lab = {}
-base_learning_rates_lab["cracker_box"] = base_learning_rates["cracker_box"] / 3
-base_learning_rates_lab["sugar_box"] = base_learning_rates["sugar_box"] / 3
-base_learning_rates_lab["hammer"] = base_learning_rates["hammer"]
-base_learning_rates_lab["chess_board"] = base_learning_rates["chess_board"] / 3
-base_learning_rates_lab["chess_board_weighted"] = base_learning_rates["chess_board_weighted"] / 3
-base_learning_rates_lab["wooden_rod"] = base_learning_rates["wooden_rod"]
+base_learning_rates_lab["cracker_box"] = base_learning_rates["cracker_box"]
+base_learning_rates_lab["sugar_box"] = 0.9*base_learning_rates["sugar_box"]
+base_learning_rates_lab["hammer"] = 3.*base_learning_rates["hammer"]
+base_learning_rates_lab["chess_board"] = 2.5*base_learning_rates["chess_board"]
+base_learning_rates_lab["chess_board_weighted"] = 2.5*base_learning_rates["chess_board_weighted"]
+base_learning_rates_lab["wooden_rod"] = 5.*base_learning_rates["wooden_rod"]
 
 
 base_learning_rates_clutter = {}
-base_learning_rates_clutter["cracker_box"] = base_learning_rates["cracker_box"]
+base_learning_rates_clutter["cracker_box"] = 1.5*base_learning_rates["cracker_box"]
 base_learning_rates_clutter["master_chef_can"] = 1.5*base_learning_rates["master_chef_can"]
 base_learning_rates_clutter["pudding_box"] = 3.*base_learning_rates["pudding_box"]
 base_learning_rates_clutter["sugar_box"] = 3.*base_learning_rates["sugar_box"]
-base_learning_rates_clutter["mustard_bottle"] = 3.*base_learning_rates["mustard_bottle"]
+base_learning_rates_clutter["mustard_bottle"] = 2.*base_learning_rates["mustard_bottle"]
 base_learning_rates_clutter["bleach_cleanser"] = 3.*base_learning_rates["bleach_cleanser"]
-base_learning_rates_clutter["hammer"] = base_learning_rates["hammer"]
+base_learning_rates_clutter["hammer"] = 7.*base_learning_rates["hammer"]
 base_learning_rates_clutter["chess_board"] = base_learning_rates["chess_board"]
 base_learning_rates_clutter["chess_board_weighted"] = base_learning_rates["chess_board_weighted"]
 

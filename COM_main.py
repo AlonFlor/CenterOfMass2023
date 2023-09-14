@@ -714,8 +714,8 @@ def make_graphs_and_videos_for_scene(scene):
 #full_run_one_scene("mustard_bottle")
 #make_graphs_and_videos_for_scene("mustard_bottle")
 
-full_run_one_scene("bleach_cleanser")
-make_graphs_and_videos_for_scene("bleach_cleanser")
+#full_run_one_scene("bleach_cleanser")
+#make_graphs_and_videos_for_scene("bleach_cleanser")
 
 
 
