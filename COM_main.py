@@ -109,7 +109,7 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
             for i in np.arange(number_of_objects):
                 rotation_axis_index, axis_sign = object_rotation_axes[i]
 
-                # for the target object generate COMs to be the intersection of the two pushing lines formed by the two pushes.
+                # for the target object generate COMs to be the intersection of the two pushing lines formed by perpendicular pushes.
                 if i==object_index_outer_loop:
                     free_axis_0_index = 0
                     while free_axis_0_index==rotation_axis_index:
@@ -120,6 +120,7 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
 
                     push_start_coords = []
                     axes_order_list = []
+                    print(pushing_scenarios)
                     for pushing_scenario_index in pushing_scenario_indices_this_object:
                         start,end = pushing_scenarios[pushing_scenario_index]
 
@@ -133,16 +134,26 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
                         push_dir = end_obj_coords - start_obj_coords
                         push_dir /= np.linalg.norm(push_dir)
                         if abs(push_dir[free_axis_0_index]) > abs(push_dir[free_axis_1_index]):
-                            axes_order_list.append(free_axis_1_index)   #push in axis 0 direction, so take the axis 0 coordinate
+                            axes_order_list.append((1,free_axis_1_index))   #push in axis 0 direction, so take the axis 0 coordinate
                         else:
-                            axes_order_list.append(free_axis_0_index)   #push in axis 1 direction, so take the axis 1 coordinate
+                            axes_order_list.append((0,free_axis_0_index))   #push in axis 1 direction, so take the axis 1 coordinate
 
                     generated_com = np.array([0.,0.,0.])
-                    generated_com[axes_order_list[0]] = push_start_coords[0][axes_order_list[0]]
-                    generated_com[axes_order_list[1]] = push_start_coords[1][axes_order_list[1]]
+                    #get axes from pushes that act on different sides.
+                    for index_0, pair in enumerate(axes_order_list):
+                        index_1, index_2 = pair
+                        if index_1==0:
+                            generated_com[index_2] = push_start_coords[index_0][index_2]
+                            break
+                    for index_0, pair in enumerate(axes_order_list):
+                        index_1, index_2 = pair
+                        if index_1==1:
+                            generated_com[index_2] = push_start_coords[index_0][index_2]
+                            break
+                    print("generated_com",generated_com)
 
-                    #if the object is the real life hammer, initialize the COM to be in the geometric center
-                    if object_types[i]=="hammer" and scene_starts is not None:
+                    #if the object is the hammer, initialize the COM to be in the geometric center
+                    if object_types[i]=="hammer":
                         com_x_range,com_y_range,com_z_range = simulation_and_display.object_type_com_bounds[object_types[i]]["com_bounds"]
                         generated_com = 0.5*(np.array([com_x_range[0],com_y_range[0],com_z_range[0]]) + np.array([com_x_range[1],com_y_range[1],com_z_range[1]]))
 
@@ -164,15 +175,15 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
                 method_dir = os.path.join(this_dir, method_name)
                 if not os.path.isdir(method_dir):
                     os.mkdir(method_dir)
-                '''losses, accumulated_COMs_list, simulated_data_list = \
+                losses, accumulated_COMs_list, simulated_data_list = \
                     COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
                                                 pushing_scenarios_this_object, pushing_scenario_object_targets_this_object,
                                                 starting_data, ground_truth_data_this_object,
                                                 object_rotation_axes, object_types,
                                                 current_COMs_list, available_methods[method_name],
                                                 # view_matrix=view_matrix, proj_matrix=proj_matrix,
-                                                shift_plane=shift_plane, scene_starts=scene_starts_this_object)'''
-                if method_name=="proposed_method":
+                                                shift_plane=shift_plane, scene_starts=scene_starts_this_object)
+                '''if method_name=="proposed_method":
                     losses, accumulated_COMs_list, simulated_data_list = \
                         COM_search_methods.find_COM(number_of_iterations, method_dir, basic_scene_data,
                                                     pushing_scenarios_this_object, pushing_scenario_object_targets_this_object,
@@ -189,7 +200,7 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
                                                     object_rotation_axes, object_types,
                                                     current_COMs_list, available_methods[method_name],
                                                     # view_matrix=view_matrix, proj_matrix=proj_matrix,
-                                                    shift_plane=shift_plane, scene_starts=scene_starts_this_object)
+                                                    shift_plane=shift_plane, scene_starts=scene_starts_this_object)'''
 
                 losses_across_methods.append(losses)
                 simulated_data_across_methods.append(simulated_data_list)
@@ -266,7 +277,7 @@ def run_a_train_test_session(basic_scene_data, number_of_objects, test_dir, this
 
 
 
-def full_run_one_scene(scene, num_train_test_sessions):
+def full_run_one_scene(scene):
     # set up camera
     global view_matrix, proj_matrix
     view_matrix = view_matrix_simulated_cases
@@ -346,7 +357,7 @@ def full_run_one_scene(scene, num_train_test_sessions):
 
 
 
-    #split pushes into training and testing sets. Randomly choose one push from each class to go into the training set. Number of training sets = num_train_test_sessions times.
+    #sort push indices by class
     pushing_scenario_indices_by_class = []
     for i in np.arange(number_of_classes):
         pushing_scenario_indices_by_class.append([])
@@ -354,68 +365,25 @@ def full_run_one_scene(scene, num_train_test_sessions):
         class_id = pushing_scenario_class_indices[i]
         pushing_scenario_indices_by_class[class_id].append(i)
 
-    training_pushes_sets = []
-    for i in np.arange(num_train_test_sessions):
-        can_add_training_pushes_set = False
-        training_pushes_set = []
-        while not can_add_training_pushes_set:
-            training_pushes_set = []
-            for class_id in np.arange(number_of_classes):
-                training_pushes_set.append(random.choice(pushing_scenario_indices_by_class[class_id]))
-            can_add_training_pushes_set = True
+    training_pushes_set = []
+    #add first two pushes of each class to the training set
+    for class_id in np.arange(number_of_classes):
+        training_pushes_set.append(pushing_scenario_indices_by_class[class_id][0])
+        training_pushes_set.append(pushing_scenario_indices_by_class[class_id][1])
 
-            #make sure the training set is not repeated
-            for other_training_pushes_set in training_pushes_sets:
-                if other_training_pushes_set == training_pushes_set:
-                    can_add_training_pushes_set = False
-                    break
-        training_pushes_sets.append(training_pushes_set)
+    #train
+    pushing_scenarios_training = []
+    pushing_scenario_training_object_targets = []
+    for pushing_scenario_index in training_pushes_set:
+        pushing_scenarios_training.append(pushing_scenarios[pushing_scenario_index])
+        pushing_scenario_training_object_targets.append(pushing_scenario_object_targets[pushing_scenario_index])
 
-    #train using the pushing scenarios in the training set, and test with the remaining pushing scenarios
-    for train_test_session_index, training_pushes_set in enumerate(training_pushes_sets):
-        #separate pushing scenarios into training and testing sets
-        pushing_scenarios_training = []
-        pushing_scenario_training_object_targets = []
-        for pushing_scenario_index in training_pushes_set:
-            pushing_scenarios_training.append(pushing_scenarios[pushing_scenario_index])
-            pushing_scenario_training_object_targets.append(pushing_scenario_object_targets[pushing_scenario_index])
-        pushing_scenarios_testing = []
-        pushing_scenario_testing_object_targets = []
-        testing_pushes_set = []
-        for i,pushing_scenario in enumerate(pushing_scenarios):
-            if i not in training_pushes_set:
-                pushing_scenarios_testing.append(pushing_scenario)
-                pushing_scenario_testing_object_targets.append(pushing_scenario_object_targets[i])
-                testing_pushes_set.append(i)
-
-        #train to get the COMs for each method
-        training_dir = os.path.join(test_dir,f"test_session_{train_test_session_index}_training")
-        os.mkdir(training_dir)
-        run_a_train_test_session(scene_data, number_of_objects, test_dir, training_dir, pushing_scenarios_training, pushing_scenario_training_object_targets,
-                                 training_pushes_set, object_rotation_axes,
-                                 ground_truth_COMs=ground_truth_COMs)
-
-        #read COM data from training
-        COMs_list = []
-        for i,method_name in enumerate(available_methods.keys()):
-            COMs_this_method = []
-            COMs_data_this_method = []
-            for object_index in np.arange(number_of_objects):
-                COMs_file = os.path.join(training_dir, method_name, f"COMs_data_object_{object_index}.csv")
-                COMs_data_this_method.append(file_handling.read_numerical_csv_file(COMs_file))
-            for iter_num in np.arange(number_of_iterations):
-                COM_this_iter = []
-                for object_index in np.arange(number_of_objects):
-                    COM_this_iter.append(COMs_data_this_method[object_index][iter_num])
-                COMs_this_method.append(COM_this_iter)
-            COMs_list.append(COMs_this_method)
-
-
-        #test on pushes not used for training
-        testing_dir = os.path.join(test_dir,f"test_session_{train_test_session_index}_testing")
-        os.mkdir(testing_dir)
-        run_a_train_test_session(scene_data, number_of_objects, test_dir, testing_dir, pushing_scenarios_testing, pushing_scenario_testing_object_targets,
-                                 testing_pushes_set, object_rotation_axes, COMs_list=COMs_list)
+    #train to get the COMs for each method
+    training_dir = os.path.join(test_dir,f"test_session_{0}_training")
+    os.mkdir(training_dir)
+    run_a_train_test_session(scene_data, number_of_objects, test_dir, training_dir, pushing_scenarios_training, pushing_scenario_training_object_targets,
+                             training_pushes_set, object_rotation_axes,
+                             ground_truth_COMs=ground_truth_COMs)
 
 
 
@@ -495,7 +463,7 @@ def untilt_and_print_lab_scene(scene_data, object_types, number_of_objects, shif
 
 
 
-def full_run_one_scene_lab(scene, num_train_test_sessions):
+def full_run_one_scene_lab(scene):
     # set up camera
     global view_matrix, proj_matrix
     view_matrix = view_matrix_lab_cases
@@ -648,7 +616,7 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
     p.resetSimulation()
     p.setGravity(0, 0, -9.8)
 
-    # split pushes into training and testing sets. Randomly choose one push from each class to go into the training set. Number of training sets = num_train_test_sessions times.
+    # sort pushing indices by class
     pushing_scenario_indices_by_class = []
     for i in np.arange(number_of_classes):
         pushing_scenario_indices_by_class.append([])
@@ -657,81 +625,29 @@ def full_run_one_scene_lab(scene, num_train_test_sessions):
         print(class_id)
         pushing_scenario_indices_by_class[class_id].append(i)
 
-    training_pushes_sets = []
-    for i in np.arange(num_train_test_sessions):
-        can_add_training_pushes_set = False
-        training_pushes_set = []
-        #add one push of each class to the training set
-        while not can_add_training_pushes_set:
-            training_pushes_set = []
-            for class_id in np.arange(number_of_classes):
-                training_pushes_set.append(random.choice(pushing_scenario_indices_by_class[class_id]))
-            can_add_training_pushes_set = True
+    training_pushes_set = []
+    #add first two pushes of each class to the training set
+    for class_id in np.arange(number_of_classes):
+        training_pushes_set.append(pushing_scenario_indices_by_class[class_id][0])
+        training_pushes_set.append(pushing_scenario_indices_by_class[class_id][1])
+    print()
 
-            # make sure the training set is not repeated
-            for other_training_pushes_set in training_pushes_sets:
-                if other_training_pushes_set == training_pushes_set:
-                    can_add_training_pushes_set = False
-                    break
-        training_pushes_sets.append(training_pushes_set)
+    #train
+    pushing_scenarios_training = []
+    training_scene_starts = []
+    pushing_scenario_training_object_targets = []
+    for pushing_scenario_index in training_pushes_set:
+        pushing_scenarios_training.append(pushing_scenarios[pushing_scenario_index])
+        training_scene_starts.append(scene_starts[pushing_scenario_index])
+        pushing_scenario_training_object_targets.append(pushing_scenario_object_targets[pushing_scenario_index])
 
-    # train using the pushing scenarios in the training set, and test with the remaining pushing scenarios
-    for train_test_session_index, training_pushes_set in enumerate(training_pushes_sets):
-        # separate pushing scenarios into training and testing sets
-        pushing_scenarios_training = []
-        training_scene_starts = []
-        testing_scene_starts = []
-        pushing_scenario_training_object_targets = []
-        for pushing_scenario_index in training_pushes_set:
-            pushing_scenarios_training.append(pushing_scenarios[pushing_scenario_index])
-            training_scene_starts.append(scene_starts[pushing_scenario_index])
-            pushing_scenario_training_object_targets.append(pushing_scenario_object_targets[pushing_scenario_index])
-        pushing_scenarios_testing = []
-        pushing_scenario_testing_object_targets = []
-        testing_pushes_set = []
-        for i, pushing_scenario in enumerate(pushing_scenarios):
-            if i not in training_pushes_set:
-                pushing_scenarios_testing.append(pushing_scenario)
-                testing_scene_starts.append(scene_starts[i])
-                pushing_scenario_testing_object_targets.append(pushing_scenario_object_targets[i])
-                testing_pushes_set.append(i)
-        print(training_pushes_set)
-
-        # train to get the COMs for each method
-        training_dir = os.path.join(test_dir, f"test_session_{train_test_session_index}_training")
-        os.mkdir(training_dir)
-        run_a_train_test_session(scene_data, number_of_objects, test_dir, training_dir, pushing_scenarios_training,
-                                 pushing_scenario_training_object_targets,
-                                 training_pushes_set, object_rotation_axes,
-                                 ground_truth_COMs=ground_truth_COMs, shift_plane=shift_plane, scene_starts=training_scene_starts)
-
-        # read COM data from training
-        COMs_list = []
-        for i,method_name in enumerate(available_methods.keys()):
-            COMs_this_method = []
-            COMs_data_this_method = []
-            for object_index in np.arange(number_of_objects):
-                COMs_file = os.path.join(training_dir, method_name, f"COMs_data_object_{object_index}.csv")
-                if os.path.isfile(COMs_file):
-                    COMs_data_this_method.append(file_handling.read_numerical_csv_file(COMs_file))
-                else:
-                    COMs_data_this_method.append(ground_truth_COMs[object_index])       #non-target objects are tested using their ground truth COMs
-            for iter_num in np.arange(number_of_iterations):
-                COM_this_iter = []
-                for object_index in np.arange(len(COMs_data_this_method)):
-                    if len(COMs_data_this_method[object_index].shape)==1:
-                        COM_this_iter.append(COMs_data_this_method[object_index])
-                    else:
-                        COM_this_iter.append(COMs_data_this_method[object_index][iter_num])
-                COMs_this_method.append(COM_this_iter)
-            COMs_list.append(COMs_this_method)
-
-        # test on pushes not used for training
-        testing_dir = os.path.join(test_dir, f"test_session_{train_test_session_index}_testing")
-        os.mkdir(testing_dir)
-        run_a_train_test_session(scene_data, number_of_objects, test_dir, testing_dir, pushing_scenarios_testing,
-                                 pushing_scenario_testing_object_targets,
-                                 testing_pushes_set, object_rotation_axes, COMs_list=COMs_list, shift_plane=shift_plane, scene_starts=testing_scene_starts)
+    #train to get the COMs for each method
+    training_dir = os.path.join(test_dir, f"test_session_{0}_training")
+    os.mkdir(training_dir)
+    run_a_train_test_session(scene_data, number_of_objects, test_dir, training_dir, pushing_scenarios_training,
+                             pushing_scenario_training_object_targets,
+                             training_pushes_set, object_rotation_axes,
+                             ground_truth_COMs=ground_truth_COMs, shift_plane=shift_plane, scene_starts=training_scene_starts)
 
 
 
@@ -780,72 +696,69 @@ def make_graphs_and_videos_for_scene(scene):
         simulation_and_display.make_graphs_and_videos(test_dir, number_of_objects, object_types, number_of_iterations,
                                                       available_methods, scene_data, object_rotation_axes, view_matrix, proj_matrix)
 
-#full_run_one_scene("cracker_box",5)
+#full_run_one_scene("cracker_box")
 #make_graphs_and_videos_for_scene("cracker_box")
 
-#full_run_one_scene("sugar_box",5)
+#full_run_one_scene("sugar_box")
 #make_graphs_and_videos_for_scene("sugar_box")
 
-#full_run_one_scene("pudding_box",5)
+#full_run_one_scene("pudding_box")
 #make_graphs_and_videos_for_scene("pudding_box")
 
-#full_run_one_scene("master_chef_can",5)
+#full_run_one_scene("master_chef_can")
 #make_graphs_and_videos_for_scene("master_chef_can")
 
-#full_run_one_scene("hammer",5)
+#full_run_one_scene("hammer")
 #make_graphs_and_videos_for_scene("hammer")
 
-#full_run_one_scene("mustard_bottle",5)
+#full_run_one_scene("mustard_bottle")
 #make_graphs_and_videos_for_scene("mustard_bottle")
 
-#full_run_one_scene("bleach_cleanser",5)
-#make_graphs_and_videos_for_scene("bleach_cleanser")
+full_run_one_scene("bleach_cleanser")
+make_graphs_and_videos_for_scene("bleach_cleanser")
 
 
 
-#full_run_one_scene("clutter_1",5)
+#full_run_one_scene("clutter_1")
 #make_graphs_and_videos_for_scene("clutter_1")
 
-#full_run_one_scene("clutter_2",5)
+#full_run_one_scene("clutter_2")
 #make_graphs_and_videos_for_scene("clutter_2")
 
-#full_run_one_scene("clutter_3",5)
+#full_run_one_scene("clutter_3")
 #make_graphs_and_videos_for_scene("clutter_3")
 
 
 
-#full_run_one_scene_lab("cracker_box_real",2)
+#full_run_one_scene_lab("cracker_box_real")
 #make_graphs_and_videos_for_scene("cracker_box_real")
 
-#full_run_one_scene_lab("bleach_cleanser_real",2)
-
-#full_run_one_scene_lab("hammer_real",2)
+#full_run_one_scene_lab("hammer_real")
 #make_graphs_and_videos_for_scene("hammer_real")
 
-#full_run_one_scene_lab("sugar_box_real",2)
+#full_run_one_scene_lab("sugar_box_real")
 #make_graphs_and_videos_for_scene("sugar_box_real")
 
-#full_run_one_scene_lab("mustard_bottle_real",2)
-
-#full_run_one_scene_lab("chess_board_real",2)
+#full_run_one_scene_lab("chess_board_real")
 #make_graphs_and_videos_for_scene("chess_board_real")
 
-#full_run_one_scene_lab("chess_board_weighted_real",2)
+#full_run_one_scene_lab("chess_board_weighted_real")
 #make_graphs_and_videos_for_scene("chess_board_weighted_real")
 
-full_run_one_scene_lab("wooden_rod_real",2)
-make_graphs_and_videos_for_scene("wooden_rod_real")
+#full_run_one_scene_lab("wooden_rod_real")
+#make_graphs_and_videos_for_scene("wooden_rod_real")
 
 
 
-#full_run_one_scene_lab("clutter_1_real",2)
+#full_run_one_scene_lab("clutter_1_real")
 #make_graphs_and_videos_for_scene("clutter_1_real")
 
-#full_run_one_scene_lab("clutter_2_real",2)
+#full_run_one_scene_lab("clutter_2_real")
 #make_graphs_and_videos_for_scene("clutter_2_real")
 
+#full_run_one_scene_lab("clutter_3_real")
+#make_graphs_and_videos_for_scene("clutter_3_real")
 
-#full_run_one_scene_lab("clutter_2_real",2)
 
 
 p.disconnect()

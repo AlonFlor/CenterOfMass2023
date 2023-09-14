@@ -6,23 +6,21 @@ import os
 import simulation_and_display
 
 base_learning_rates = {}
-base_learning_rates["cracker_box"] = 0.25
-base_learning_rates["master_chef_can"] = 0.03
-base_learning_rates["pudding_box"] = 0.03
-base_learning_rates["sugar_box"] = 0.1
-base_learning_rates["mustard_bottle"] = 0.15
-base_learning_rates["bleach_cleanser"] = 0.17
-base_learning_rates["hammer"] = 0.17
-base_learning_rates["new_sugar_box"] = 0.1
-base_learning_rates["chess_board"] = 0.25
-base_learning_rates["chess_board_weighted"] = 0.25
-base_learning_rates["wooden_rod"] = 0.17
+base_learning_rates["cracker_box"] = 0.07
+base_learning_rates["master_chef_can"] = 0.02
+base_learning_rates["pudding_box"] = 0.02
+base_learning_rates["sugar_box"] = 0.03
+base_learning_rates["mustard_bottle"] = 0.05
+base_learning_rates["bleach_cleanser"] = 0.05
+base_learning_rates["hammer"] = 0.03
+base_learning_rates["chess_board"] = 0.07
+base_learning_rates["chess_board_weighted"] = 0.07
+base_learning_rates["wooden_rod"] = 0.05
 
 base_learning_rates_lab = {}
 base_learning_rates_lab["cracker_box"] = base_learning_rates["cracker_box"] / 3
 base_learning_rates_lab["sugar_box"] = base_learning_rates["sugar_box"] / 3
 base_learning_rates_lab["hammer"] = base_learning_rates["hammer"]
-base_learning_rates_lab["new_sugar_box"] = base_learning_rates["new_sugar_box"] / 3
 base_learning_rates_lab["chess_board"] = base_learning_rates["chess_board"] / 3
 base_learning_rates_lab["chess_board_weighted"] = base_learning_rates["chess_board_weighted"] / 3
 base_learning_rates_lab["wooden_rod"] = base_learning_rates["wooden_rod"]
@@ -40,10 +38,9 @@ base_learning_rates_clutter["chess_board"] = base_learning_rates["chess_board"]
 base_learning_rates_clutter["chess_board_weighted"] = base_learning_rates["chess_board_weighted"]
 
 base_learning_rates_clutter_lab = {}
-base_learning_rates_clutter_lab["cracker_box"] = base_learning_rates_clutter["cracker_box"] / 2.5
-base_learning_rates_clutter_lab["sugar_box"] = base_learning_rates_clutter["sugar_box"] / 4
-base_learning_rates_clutter_lab["hammer"] = base_learning_rates_clutter["hammer"]
-base_learning_rates_clutter_lab["new_sugar_box"] = base_learning_rates["new_sugar_box"] / 3
+base_learning_rates_clutter_lab["cracker_box"] = base_learning_rates_clutter["cracker_box"] / 2
+base_learning_rates_clutter_lab["sugar_box"] = base_learning_rates_clutter["sugar_box"] / 2
+base_learning_rates_clutter_lab["hammer"] = base_learning_rates_clutter["hammer"] / 3
 base_learning_rates_clutter_lab["chess_board"] = base_learning_rates["chess_board"] / 3
 base_learning_rates_clutter_lab["chess_board_weighted"] = base_learning_rates["chess_board_weighted"] / 3
 

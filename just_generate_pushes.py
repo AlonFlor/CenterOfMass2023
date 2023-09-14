@@ -24,7 +24,7 @@ object_type_com_bounds["wooden_rod"] = p_utils.get_com_bounds_for_object_type("w
 push_distance = 0.1
 cylinder_height_offset = np.array([0., 0., -0.01])
 
-scene_name = "wooden_rod"
+scene_name = "clutter_3"
 scene_dir = os.path.join("scenes",scene_name+"_real")
 push_number = int(input("Push number (0 for before first push): "))
 num_string = "" if push_number==0 else "_after_push_"+ str(push_number-1)
